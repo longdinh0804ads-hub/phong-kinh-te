@@ -1,0 +1,46 @@
+# Node / Next.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+
+# Env files - KHÔNG bao giờ commit
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Vercel
+.vercel/
+**/.vercel/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs / temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# Local uploads (filesystem - không commit avatar test cũ)
+**/public/uploads/
+
+# TS build
+*.tsbuildinfo
+next-env.d.ts
+
+# Plans dev local (giữ trong drive cá nhân, không commit)
+plans/
+
+# Claude Code config local (agent definitions, skills, personal settings)
+.claude/
+
+# Prisma generate output (auto-generated)
+**/prisma/migrations/*/migration.sql

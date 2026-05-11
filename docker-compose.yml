@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pkt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-pkt}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-phong_kinh_te}
+    volumes:
+      - pkt-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pkt} -d ${DB_NAME:-phong_kinh_te}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pkt-net
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: pkt-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-pkt}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-phong_kinh_te}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${APP_URL:-http://localhost:3000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_API_KEYS: ${ANTHROPIC_API_KEYS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_API_KEYS: ${DEEPSEEK_API_KEYS:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NODE_ENV: production
+    networks:
+      - pkt-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: pkt-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - pkt-net
+
+  backup:
+    image: postgres:16-alpine
+    container_name: pkt-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGUSER: ${DB_USER:-pkt}
+      PGPASSWORD: ${DB_PASSWORD:-changeme}
+      PGHOST: postgres
+      PGDATABASE: ${DB_NAME:-phong_kinh_te}
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "0 2 * * * pg_dump -Fc -d $$PGDATABASE > /backups/pkt-$$(date +\%Y\%m\%d-\%H\%M\%S).dump && find /backups -name 'pkt-*.dump' -mtime +30 -delete" > /etc/crontabs/root
+        crond -f -L /dev/stdout
+    networks:
+      - pkt-net
+
+volumes:
+  pkt-postgres-data:
+
+networks:
+  pkt-net:
+    driver: bridge

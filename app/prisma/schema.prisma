@@ -1,0 +1,521 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // directUrl: dùng cho `prisma migrate` / `db push` (bypass connection pooler).
+  // Trên Supabase: DATABASE_URL = pooler URL (port 6543); DIRECT_DATABASE_URL = direct (port 5432).
+  // Local dev / VPS: chỉ cần set 1 url, Prisma sẽ fallback nếu directUrl không có.
+  directUrl  = env("DIRECT_DATABASE_URL")
+  extensions = [vector]
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum Role {
+  TRUONG_PHONG    // Cấp 1 - Trưởng phòng
+  PHO_TP          // Cấp 2 - Phó Trưởng phòng
+  TRUONG_BO_PHAN  // Cấp 3 - Trưởng bộ phận
+  CHUYEN_VIEN     // Cấp 4 - Chuyên viên
+  NHAN_VIEN       // Cấp 5 - Nhân viên
+}
+
+enum Department {
+  BAN_LANH_DAO
+  TAI_CHINH_KE_HOACH
+  NONG_NGHIEP_MOI_TRUONG
+  XAY_DUNG_CONG_THUONG
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_REVIEW  // Assignee đã hoàn thành, chờ TP/PTP xác nhận
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+enum Priority {
+  KHAN_CAP    // Khẩn cấp
+  CAO         // Cao
+  THUONG      // Thường
+  THAP        // Thấp
+}
+
+enum TaskSource {
+  INTERNAL        // Nội bộ phòng giao
+  UBND_DIRECTIVE  // Từ UBND xã
+  IHANOI          // Từ phản ánh iHanoi
+}
+
+enum TTHCStatus {
+  RECEIVED      // Tiếp nhận
+  PROCESSING    // Đang xử lý
+  COMPLETED     // Hoàn thành
+  RETURNED      // Trả lại
+}
+
+enum DocType {
+  NGHI_DINH      // Nghị định
+  THONG_TU       // Thông tư
+  QUYET_DINH     // Quyết định
+  LUAT           // Luật
+  NGHI_QUYET     // Nghị quyết
+  CONG_VAN       // Công văn
+}
+
+// =====================================================
+// AUTH (Better Auth compatible)
+// =====================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String
+  image         String?
+  passwordHash  String?
+
+  // Phân quyền & vị trí
+  role            Role
+  department      Department
+  // Cho phép TRUONG_BO_PHAN quản nhiều bộ phận (vd: Đinh Xuân Hội phụ trách cả NN-MT + XD-CT).
+  // Null/empty → mặc định chỉ quản department chính.
+  managedDepartments Department[]
+  position        String      // Chức danh: "Trưởng phòng", "Chuyên viên"
+  fields          String[]    // Lĩnh vực phụ trách
+  areas           String[]    // Địa bàn phụ trách
+  teamGroupCode   String?     // "to-1" | "to-2" | null
+  isTeamLeader    Boolean     @default(false)
+  responsibilities String?    @db.Text  // Mô tả chi tiết trách nhiệm từ QĐ
+
+  isActive  Boolean  @default(true)
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sessions          Session[]
+  accounts          Account[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  createdTasks      Task[]            @relation("TaskCreator")
+  confirmedTasks    Task[]            @relation("TaskConfirmer")
+  authoredNotes     TaskNote[]        @relation("TaskNoteAuthor")
+  progressReports   ProgressReport[]
+  workSchedules     WorkSchedule[]
+  chatHistories     ChatHistory[]
+  conversations     Conversation[]
+  uploadedDocs      LegalDocument[]
+  notifications     Notification[]
+  iHanoiHandled     IHanoiComplaint[]
+  tthcHandled       TTHCRecord[]
+  ubndAssigned      UBNDDirective[]   @relation("UBNDAssignee")
+  aiAuditLogs       AIAuditLog[]
+
+  @@index([role])
+  @@index([department])
+  @@index([teamGroupCode])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model Account {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId    String
+  providerId   String
+  password     String?
+  accessToken  String?
+  refreshToken String?
+  idToken      String?
+  expiresAt    DateTime?
+  scope        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// =====================================================
+// TASK MANAGEMENT
+// =====================================================
+
+model TaskGroup {
+  id          String   @id @default(cuid())
+  name        String   // "Tổ 1", "Tổ 2"
+  code        String   @unique // "to-1", "to-2"
+  description String?
+  area        String?  // Địa bàn quản lý
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("task_groups")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?    @db.Text
+  status      TaskStatus @default(PENDING)
+  priority    Priority   @default(THUONG)
+  deadline    DateTime
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Người được giao (cá nhân HOẶC nhóm)
+  assigneeId  String?
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  taskGroupId String?
+  taskGroup   TaskGroup? @relation(fields: [taskGroupId], references: [id])
+
+  // Người giao
+  creatorId String
+  creator   User   @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  // Người TP/PTP xác nhận hoàn thành (sau khi assignee gửi)
+  submittedAt    DateTime?
+  confirmedById  String?
+  confirmedBy    User?     @relation("TaskConfirmer", fields: [confirmedById], references: [id])
+  confirmedAt    DateTime?
+
+  // Sub-tasks
+  parentTaskId String?
+  parentTask   Task?   @relation("SubTasks", fields: [parentTaskId], references: [id])
+  subTasks     Task[]  @relation("SubTasks")
+
+  attachments String[] // File paths
+
+  // Nguồn nhiệm vụ
+  sourceType TaskSource @default(INTERNAL)
+  sourceId   String?    // FK tới UBNDDirective hoặc IHanoiComplaint
+
+  // Tham chiếu văn bản pháp lý
+  legalReferences String[]
+
+  progressReports ProgressReport[]
+  notes           TaskNote[]
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([assigneeId])
+  @@index([taskGroupId])
+  @@index([creatorId])
+  @@index([status])
+  @@index([deadline])
+  @@index([sourceType, sourceId])
+  @@map("tasks")
+}
+
+model ProgressReport {
+  id              String  @id @default(cuid())
+  taskId          String
+  task            Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reporterId      String
+  reporter        User    @relation(fields: [reporterId], references: [id])
+  percentComplete Int     // 0-100
+  notes           String? @db.Text
+  blockers        String? @db.Text
+  weekNumber      Int?
+  monthNumber     Int?
+  year            Int?
+  attachments     String[]
+  createdAt       DateTime @default(now())
+
+  @@index([taskId])
+  @@index([reporterId])
+  @@index([year, weekNumber])
+  @@index([year, monthNumber])
+  @@map("progress_reports")
+}
+
+/// Lời nhắn / nhắc nhở của lãnh đạo trên 1 task.
+/// Comment-thread style: nhiều note/task, hiển thị theo thứ tự ghim trước + mới nhất.
+model TaskNote {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("TaskNoteAuthor", fields: [authorId], references: [id])
+  content   String   @db.Text
+
+  // Snapshot tên + chức vụ lúc tạo (immutable - giữ context lịch sử)
+  authorName     String
+  authorPosition String
+  authorRole     Role
+
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, createdAt])
+  @@index([authorId])
+  @@map("task_notes")
+}
+
+// =====================================================
+// UBND DIRECTIVES & WORK SCHEDULE
+// =====================================================
+
+model UBNDDirective {
+  id           String     @id @default(cuid())
+  documentNo   String?    // Số văn bản
+  title        String
+  content      String?    @db.Text
+  issuedBy     String     @default("UBND Xã Trần Phú")
+  issuedDate   DateTime
+  receivedDate DateTime   @default(now())
+  deadline     DateTime
+  status       TaskStatus @default(PENDING)
+
+  assigneeId    String?    // Cán bộ được giao chính
+  assignee      User?      @relation("UBNDAssignee", fields: [assigneeId], references: [id])
+  phongResponse String?    @db.Text
+  responseDate  DateTime?
+  attachments   String[]
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([assigneeId])
+  @@index([status])
+  @@index([deadline])
+  @@map("ubnd_directives")
+}
+
+model WorkSchedule {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?   @db.Text
+  scheduleDate DateTime
+  endDate      DateTime?
+  location     String?
+  weekNumber   Int
+  monthNumber  Int
+  year         Int
+  isAllDay     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([year, weekNumber])
+  @@index([year, monthNumber])
+  @@map("work_schedules")
+}
+
+// =====================================================
+// iHANOI & TTHC
+// =====================================================
+
+model IHanoiComplaint {
+  id           String     @id @default(cuid())
+  ticketCode   String     @unique
+  content      String     @db.Text
+  citizenName  String?
+  citizenPhone String?
+  citizenAddress String?
+  receivedDate DateTime
+  deadline     DateTime?
+  assigneeId   String?
+  assignee     User?      @relation(fields: [assigneeId], references: [id])
+  status       TaskStatus @default(PENDING)
+  resolution   String?    @db.Text
+  resolvedDate DateTime?
+  attachments  String[]
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([assigneeId])
+  @@index([status])
+  @@map("ihanoi_complaints")
+}
+
+model TTHCRecord {
+  id            String     @id @default(cuid())
+  procedureCode String     // Mã thủ tục
+  procedureName String
+  applicantName String
+  applicantPhone String?
+  receivedDate  DateTime
+  deadline      DateTime
+  status        TTHCStatus @default(RECEIVED)
+  handlerId     String?
+  handler       User?      @relation(fields: [handlerId], references: [id])
+  area          String?    // Địa bàn (Tổ 1/Tổ 2/...)
+  notes         String?    @db.Text
+  resultFiles   String[]
+  deletedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([handlerId])
+  @@index([status])
+  @@index([procedureCode])
+  @@map("tthc_records")
+}
+
+// =====================================================
+// AI LEGAL ASSISTANT (RAG)
+// =====================================================
+
+model LegalDocument {
+  id            String       @id @default(cuid())
+  title         String
+  docType       DocType
+  docNumber     String
+  issuedDate    DateTime
+  effectiveDate DateTime
+  status        String       @default("active") // "active" | "superseded" | "expired"
+  supersededBy  String?
+  filePath      String?
+  uploadedById  String?
+  uploadedBy    User?        @relation(fields: [uploadedById], references: [id])
+  summary       String?      @db.Text
+  chunks        LegalChunk[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([docType, docNumber])
+  @@index([status])
+  @@map("legal_documents")
+}
+
+model LegalChunk {
+  id         String        @id @default(cuid())
+  documentId String
+  document   LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  article    String?       // "Điều 5"
+  section    String?       // "Khoản 2"
+  point      String?       // "Điểm a"
+  content    String        @db.Text
+  // Vector field for pgvector cosine similarity (768 dim, Gemini gemini-embedding-001 Matryoshka)
+  // Truy vấn qua raw SQL vì Prisma chưa hỗ trợ vector type native
+  embedding  Unsupported("vector(768)")?
+  createdAt  DateTime      @default(now())
+
+  @@index([documentId])
+  @@map("legal_chunks")
+}
+
+// Cuộc hội thoại (thread) - tự động xóa sau 7 ngày
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?  // Auto-sinh từ câu hỏi đầu (truncate 80 chars)
+  isPinned  Boolean  @default(false) // Ghim → không bị auto-xóa
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatHistory[]
+
+  @@index([userId, updatedAt])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+model ChatHistory {
+  id             String        @id @default(cuid())
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question       String        @db.Text
+  answer         String        @db.Text
+  sources        Json?         // Array of {documentId, article, section}
+  isSaved        Boolean       @default(false)
+  rating         Int?          // 1-5
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("chat_histories")
+}
+
+// =====================================================
+// NOTIFICATIONS
+// =====================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "TASK_ASSIGNED" | "TASK_OVERDUE" | "REPORT_DUE" | "UBND_NEW"
+  title     String
+  message   String   @db.Text
+  link      String?
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// =====================================================
+// AI AGENT AUDIT LOG
+// =====================================================
+
+model AIAuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "tool:createTask", "tool:getTaskStats", "command:parse", "digest:generate"
+  action    String
+  tool      String?  // tool name nếu là tool call
+  input     Json?    // arguments truyền vào
+  output    Json?    // kết quả trả về (sanitized)
+  success   Boolean  @default(true)
+  errorMsg  String?  @db.Text
+  duration  Int?     // ms
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("ai_audit_logs")
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/risk-scan",
+      "schedule": "*/30 * * * *"
+    }
+  ],
+  "functions": {
+    "app/api/ai/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/risk-scan/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/legal/parse-pdf/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}

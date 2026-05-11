@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand colors - hành chính nhà nước (refined: warmer & softer) */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 13%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 13%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 13%;
+
+  /* Primary: Navy blue đậm hơn 1 chút, sang trọng */
+  --primary: 217 85% 28%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 215 25% 96%;
+  --secondary-foreground: 222 47% 13%;
+
+  --muted: 215 25% 96%;
+  --muted-foreground: 215 16% 45%;
+
+  --accent: 215 25% 94%;
+  --accent-foreground: 222 47% 13%;
+
+  --destructive: 0 75% 52%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 215 25% 90%;
+  --input: 215 25% 89%;
+  --ring: 217 85% 28%;
+
+  /* Radius mềm hơn cho cảm giác hiện đại */
+  --radius: 0.75rem;
+
+  --success: 142 71% 42%;
+  --warning: 38 92% 50%;
+  --info: 199 89% 48%;
+
+  /* Shadow tokens — layered, tinh tế */
+  --shadow-sm: 0 1px 2px 0 hsl(var(--foreground) / 0.04);
+  --shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.06), 0 1px 2px -1px hsl(var(--foreground) / 0.05);
+  --shadow-md: 0 4px 8px -2px hsl(var(--foreground) / 0.06), 0 2px 4px -2px hsl(var(--foreground) / 0.04);
+  --shadow-lg: 0 10px 20px -4px hsl(var(--foreground) / 0.08), 0 4px 8px -4px hsl(var(--foreground) / 0.04);
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  /* Font stack: Be Vietnam Pro (modern, mềm mại) → Noto Sans (fallback) → system */
+  font-family: var(--font-sans), var(--font-noto-sans), "Be Vietnam Pro", "Noto Sans",
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  font-feature-settings: "cv11", "ss01", "ss03"; /* stylistic sets cho ký tự đẹp hơn */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
+}
+
+/* Typography refined: tracking tight cho heading - chuyên nghiệp, dễ đọc */
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
+}
+h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+
+/* Responsive: heading lớn hơn trên desktop */
+@media (min-width: 768px) {
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+  h4 { font-size: 1.125rem; }
+}
+
+/* Numeric tabular - căn đẹp cho số liệu báo cáo */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Touch targets ≥48px cho mobile */
+@media (max-width: 768px) {
+  button, a[role="button"], input[type="submit"], input[type="button"] {
+    min-height: 44px;
+  }
+}
+
+/* Print styles for PDF reports */
+@media print {
+  body { font-size: 12pt; }
+  .no-print { display: none !important; }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: hsl(var(--muted)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+
+/* =====================================================
+   ANIMATIONS & EFFECTS - Hành chính công chuyên nghiệp
+   Phong cách: trang trọng, mượt mà, không lòe loẹt
+   ===================================================== */
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.5); }
+  70% { box-shadow: 0 0 0 6px hsl(var(--destructive) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0); }
+}
+
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  0% { opacity: 0; transform: translateX(-8px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Skeleton loading - cho khi data đang fetch */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+/* Pulse cho badge urgent (destructive variant với data-urgent) */
+.animate-pulse-ring {
+  animation: pulse-ring 2s infinite;
+}
+
+/* Page entrance animation */
+.animate-fade-in-up {
+  animation: fade-in-up 300ms ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 250ms ease-out;
+}
+
+/* Hover lift effect cho card / link interactive */
+.hover-lift {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px -8px hsl(var(--primary) / 0.15),
+    0 4px 12px -4px hsl(var(--foreground) / 0.05);
+}
+
+/* Gradient nền cho primary button - tinh tế, không nổi */
+.btn-gradient-primary {
+  background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(217 91% 32%) 100%);
+  background-size: 200% 200%;
+  background-position: 0% 50%;
+  transition: background-position 250ms ease-out, box-shadow 200ms, transform 100ms;
+}
+.btn-gradient-primary:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 4px 14px -2px hsl(var(--primary) / 0.4);
+}
+.btn-gradient-primary:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.btn-gradient-destructive {
+  background-image: linear-gradient(135deg, hsl(var(--destructive)) 0%, hsl(0 84% 58%) 100%);
+  background-size: 200% 200%;
+  background-position: 0% 50%;
+  transition: background-position 250ms ease-out, box-shadow 200ms, transform 100ms;
+}
+.btn-gradient-destructive:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 4px 14px -2px hsl(var(--destructive) / 0.4);
+}
+.btn-gradient-destructive:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Subtle gradient backdrop cho dashboard */
+.bg-page-gradient {
+  background:
+    radial-gradient(ellipse 800px 600px at top, hsl(var(--primary) / 0.05), transparent 60%),
+    radial-gradient(ellipse 600px 400px at bottom right, hsl(var(--info) / 0.04), transparent 60%),
+    hsl(var(--muted) / 0.3);
+}
+
+/* Input focus glow effect */
+.input-glow:focus-visible {
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.15);
+  border-color: hsl(var(--primary));
+  outline: none;
+}
+
+/* Card với border-glow khi hover */
+.card-interactive {
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-interactive:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow: 0 6px 20px -8px hsl(var(--primary) / 0.18);
+}
+
+/* Reduce motion - tôn trọng a11y */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
