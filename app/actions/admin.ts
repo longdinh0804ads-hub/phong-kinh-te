@@ -14,6 +14,7 @@ import {
 } from "@/lib/system-settings";
 import { reloadRotators } from "@/lib/api-key-rotator";
 import { runRiskScan } from "@/lib/ai-monitor/scanner";
+import { checkAllProviders, checkProviderKeys, type Provider } from "@/lib/api-key-health";
 import { headers } from "next/headers";
 
 // =====================================================
@@ -79,6 +80,21 @@ export async function updateApiKey(input: z.infer<typeof apiKeySchema>) {
 
   // Force reload rotators để key mới có hiệu lực ngay
   await reloadRotators();
+
+  // Auto-trigger health check provider tương ứng để có status ngay
+  const provider: Provider | null = data.key.startsWith("GEMINI")
+    ? "gemini"
+    : data.key.startsWith("DEEPSEEK")
+    ? "deepseek"
+    : data.key.startsWith("ANTHROPIC")
+    ? "anthropic"
+    : null;
+  if (provider) {
+    // Run in background - không await để response nhanh
+    checkProviderKeys(provider).catch((e) =>
+      console.error(`[admin] auto health check fail:`, e?.message)
+    );
+  }
 
   await logAdminAction({
     adminId: admin.id,
@@ -202,6 +218,42 @@ export async function testApiKey(provider: "gemini" | "deepseek" | "anthropic"):
       latencyMs: Date.now() - t0,
     };
   }
+}
+
+// =====================================================
+// API KEY HEALTH CHECK
+// =====================================================
+
+/** Trigger check tất cả keys (3 providers) ngay - super admin manual. */
+export async function runAllKeyHealthCheck() {
+  const admin = await requireSuperAdmin();
+  const result = await checkAllProviders();
+  await logAdminAction({
+    adminId: admin.id,
+    action: "settings:check-all-keys",
+    details: {
+      totalKeys: result.totalKeys,
+      okKeys: result.okKeys,
+      failedKeys: result.failedKeys,
+      durationMs: result.durationMs,
+    },
+  });
+  revalidatePath("/admin/api-keys");
+  revalidatePath("/admin");
+  return { success: true, ...result };
+}
+
+/** Trigger check 1 provider cụ thể. */
+export async function runProviderHealthCheck(provider: Provider) {
+  const admin = await requireSuperAdmin();
+  const results = await checkProviderKeys(provider);
+  await logAdminAction({
+    adminId: admin.id,
+    action: `settings:check-keys-${provider}`,
+    details: { count: results.length },
+  });
+  revalidatePath("/admin/api-keys");
+  return { success: true, results };
 }
 
 // =====================================================

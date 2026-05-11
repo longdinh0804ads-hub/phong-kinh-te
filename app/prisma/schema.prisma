@@ -522,6 +522,24 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+/// Health check kết quả cho từng API key (mỗi provider có thể có multi-key).
+/// 1 record per (provider, keyIndex) - upsert mỗi lần check.
+model ApiKeyHealthCheck {
+  id          String   @id @default(cuid())
+  provider    String   // "gemini" | "deepseek" | "anthropic"
+  keyIndex    Int      // position trong multi-key list (0-based)
+  keyPrefix   String   // mask để identify: "AIzaSyA7Rr"
+  status      String   // "ok" | "rate_limited" | "invalid" | "network_error" | "timeout"
+  latencyMs   Int?
+  errorMsg    String?  @db.Text
+  httpStatus  Int?
+  testedAt    DateTime @default(now())
+
+  @@unique([provider, keyIndex])
+  @@index([provider])
+  @@map("api_key_health_checks")
+}
+
 /// Audit log riêng cho hành động của SUPER_ADMIN (khác AIAuditLog cho user nghiệp vụ).
 model AdminAuditLog {
   id         String   @id @default(cuid())

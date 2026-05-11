@@ -19,6 +19,7 @@ import {
   getDeepSeekRotatorAsync,
   getAnthropicRotatorAsync,
 } from "@/lib/api-key-rotator";
+import { getKeyHealthSummary } from "@/lib/api-key-health";
 import { formatRelative } from "@/lib/utils";
 
 export default async function AdminDashboardPage() {
@@ -33,11 +34,12 @@ export default async function AdminDashboardPage() {
     dbOk = false;
   }
 
-  // Check AI provider status từ rotator
-  const [gemini, deepseek, anthropic] = await Promise.all([
+  // Check AI provider status từ rotator + health summary từ DB
+  const [gemini, deepseek, anthropic, keyHealth] = await Promise.all([
     getGeminiRotatorAsync(),
     getDeepSeekRotatorAsync(),
     getAnthropicRotatorAsync(),
+    getKeyHealthSummary(),
   ]);
   const aiStatus = {
     gemini: gemini.status(),
@@ -89,6 +91,47 @@ export default async function AdminDashboardPage() {
         <h1 className="text-2xl font-bold">Tổng quan hệ thống</h1>
         <p className="text-sm text-muted-foreground">Health check + lỗi 24h gần nhất</p>
       </div>
+
+      {/* API Key Health Banner - prominent nếu có vấn đề */}
+      {keyHealth.totalKeys > 0 && (
+        <div
+          className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${
+            keyHealth.failedKeys === 0
+              ? "bg-green-50 border-green-200 text-green-900"
+              : keyHealth.invalid > 0
+              ? "bg-red-50 border-red-200 text-red-900"
+              : "bg-amber-50 border-amber-200 text-amber-900"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="text-2xl shrink-0">
+              {keyHealth.failedKeys === 0 ? "✅" : keyHealth.invalid > 0 ? "🚨" : "⚠️"}
+            </div>
+            <div>
+              <div className="font-semibold text-sm">
+                {keyHealth.failedKeys === 0
+                  ? `Tất cả ${keyHealth.totalKeys} API keys hoạt động bình thường`
+                  : `${keyHealth.okKeys}/${keyHealth.totalKeys} keys OK · ${keyHealth.failedKeys} keys có vấn đề`}
+              </div>
+              <div className="text-xs mt-0.5">
+                {keyHealth.invalid > 0 && `${keyHealth.invalid} key invalid · `}
+                {keyHealth.rateLimited > 0 && `${keyHealth.rateLimited} hết quota · `}
+                {keyHealth.errored > 0 && `${keyHealth.errored} lỗi mạng · `}
+                {keyHealth.lastCheckAt
+                  ? `Check lần cuối ${formatRelative(keyHealth.lastCheckAt)}`
+                  : "Chưa health check"}
+                {keyHealth.staleness === "stale" && " (đã cũ - nên check lại)"}
+              </div>
+            </div>
+          </div>
+          <a
+            href="/admin/api-keys"
+            className="text-xs font-semibold underline shrink-0 hover:no-underline"
+          >
+            Xem chi tiết →
+          </a>
+        </div>
+      )}
 
       {/* Health cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

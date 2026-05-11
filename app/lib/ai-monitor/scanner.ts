@@ -522,6 +522,37 @@ export async function runRiskScan(): Promise<ScanResult> {
     result.errors.push(`awaiting-review: ${e.message}`);
   }
 
+  // ====== STEP 8: Health check API keys (gộp vào cron để khỏi cần cron riêng) ======
+  try {
+    const { checkAllProviders } = await import("@/lib/api-key-health");
+    const health = await checkAllProviders();
+    // Notify TP/PTP nếu có key invalid (cần admin update)
+    if (health.failedKeys > 0) {
+      const topLeaders = await getLeaderIdsFor({ includeTopLeaders: true });
+      const invalidProviders: string[] = [];
+      for (const p of ["gemini", "deepseek", "anthropic"] as const) {
+        const failed = health[p].filter((k) => k.status === "invalid");
+        if (failed.length > 0) invalidProviders.push(p);
+      }
+      if (invalidProviders.length > 0) {
+        for (const userId of topLeaders) {
+          const r = await createNotificationIfNew({
+            userId,
+            type: "RISK_OVERDUE" as any, // reuse type, custom message
+            entityId: `api-key-${invalidProviders.join("-")}`,
+            title: "🔑 API key cần update",
+            message: `Phát hiện key invalid: ${invalidProviders.join(", ")}. Vui lòng nhờ Quản trị hệ thống cập nhật.`,
+            link: "/admin/api-keys",
+          });
+          if (r === "created") result.notificationsCreated++;
+          else result.notificationsSkippedDedup++;
+        }
+      }
+    }
+  } catch (e: any) {
+    result.errors.push(`api-key-health: ${e.message}`);
+  }
+
   // ====== Log to AIAuditLog ======
   result.durationMs = Date.now() - startedAt.getTime();
   try {
