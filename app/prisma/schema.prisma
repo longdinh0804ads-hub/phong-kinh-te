@@ -98,8 +98,32 @@ model User {
 
   isActive  Boolean  @default(true)
   phone     String?
+
+  // ====== FIELD ENCRYPTION INDEX (P3) ======
+  /// Blind index cho User.phone (HMAC-SHA256) - cho phép lookup theo số ĐT khi phone đã encrypt
+  phoneBidx String?  @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // ====== SECURITY FIELDS (P1-P2) ======
+  /// Lần đổi mật khẩu gần nhất - dùng cho password expiry (180 ngày cho TP/PTP/SUPER_ADMIN)
+  passwordChangedAt    DateTime?
+  /// Số lần đăng nhập thất bại liên tiếp (reset khi login thành công)
+  failedLoginCount     Int       @default(0)
+  /// Tài khoản bị khóa đến thời điểm này (lockout do brute-force)
+  lockedUntil          DateTime?
+  /// Lý do khóa (vd "5_FAILS_15M", "ADMIN_LOCKED")
+  lockReason           String?
+  /// 2FA TOTP secret (encrypted) - null nghĩa là chưa enable
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean   @default(false)
+  /// Backup codes 2FA (mảng hash SHA-256 của code 1 lần dùng)
+  twoFactorBackupCodes String[]  @default([])
+  /// Thời điểm hoạt động gần nhất (cho idle timeout enforcement)
+  lastActivityAt       DateTime?
+  /// Force change password vào lần login tiếp theo (sau khi admin reset)
+  mustChangePassword   Boolean   @default(false)
 
   // Relations
   sessions          Session[]
@@ -120,6 +144,10 @@ model User {
   tthcHandled       TTHCRecord[]
   ubndAssigned      UBNDDirective[]   @relation("UBNDAssignee")
   aiAuditLogs       AIAuditLog[]
+  passwordHistory   PasswordHistory[]
+  loginAttempts     LoginAttempt[]
+  trustedDevices    TrustedDevice[]
+  securityEvents    SecurityEvent[]
 
   @@index([role])
   @@index([department])
@@ -138,8 +166,25 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ====== SECURITY BINDING (P1.6) ======
+  /// SHA-256 fingerprint thiết bị (canvas + WebGL + fonts + timezone)
+  deviceId          String?
+  /// Tên hiển thị (vd "Chrome 130 / Windows 11")
+  deviceName        String?
+  /// FK tới TrustedDevice nếu user đã xác nhận tin cậy
+  trustedDeviceId   String?
+  /// Subnet /24 của IP đăng nhập (dùng để detect IP drift)
+  ipSubnet          String?
+  /// Hash User-Agent rút gọn (browser+OS) - so sánh lúc resolve
+  userAgentHash     String?
+  /// Lần activity gần nhất (phục vụ idle timeout 30 phút)
+  lastActivityAt    DateTime?
+  /// Đã pass 2FA challenge chưa
+  twoFactorVerified Boolean   @default(false)
+
   @@index([userId])
   @@index([token])
+  @@index([expiresAt])
   @@map("sessions")
 }
 
@@ -366,12 +411,20 @@ model IHanoiComplaint {
   resolution   String?    @db.Text
   resolvedDate DateTime?
   attachments  String[]
+
+  // ====== BLIND INDEX (P3) - hỗ trợ search citizen ======
+  /// Trigram blind index của citizenName
+  citizenNameBidx  String[] @default([])
+  /// Exact blind index của citizenPhone (lookup theo SĐT)
+  citizenPhoneBidx String?
+
   deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   @@index([assigneeId])
   @@index([status])
+  @@index([citizenPhoneBidx])
   @@map("ihanoi_complaints")
 }
 
@@ -389,6 +442,13 @@ model TTHCRecord {
   area          String?    // Địa bàn (Tổ 1/Tổ 2/...)
   notes         String?    @db.Text
   resultFiles   String[]
+
+  // ====== BLIND INDEX (P3) ======
+  /// Trigram blind index của applicantName
+  applicantNameBidx  String[] @default([])
+  /// Exact blind index của applicantPhone
+  applicantPhoneBidx String?
+
   deletedAt     DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -396,6 +456,7 @@ model TTHCRecord {
   @@index([handlerId])
   @@index([status])
   @@index([procedureCode])
+  @@index([applicantPhoneBidx])
   @@map("tthc_records")
 }
 
@@ -597,4 +658,93 @@ model AIAuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("ai_audit_logs")
+}
+
+// =====================================================
+// SECURITY MODELS (P1 + P2)
+// =====================================================
+
+/// Lưu hash 5 password gần nhất để chống reuse.
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+/// Log mọi lần đăng nhập (thành công + thất bại) để audit + anomaly detection.
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  email      String
+  /// Liên kết tới user nếu email khớp (null khi email không tồn tại)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress  String
+  userAgent  String?
+  deviceId   String?
+  success    Boolean
+  /// "wrong_password" | "user_not_found" | "locked" | "inactive" | "2fa_required" | "2fa_fail" | "unknown_device" | "captcha_fail"
+  failReason String?
+  geoCity    String?
+  geoCountry String?
+  createdAt  DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
+  @@index([success, createdAt])
+  @@map("login_attempts")
+}
+
+/// Thiết bị đã đăng nhập (trusted hoặc chưa).
+/// Mỗi user × deviceId là 1 record (unique).
+model TrustedDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId    String   // SHA-256 fingerprint
+  /// "Chrome 130 / Windows 11 / Hà Nội" - tự sinh hoặc user đặt
+  deviceName  String
+  ipAddress   String
+  geoCity     String?
+  geoCountry  String?
+  userAgent   String?  @db.Text
+  /// User đã xác nhận tin cậy qua email link?
+  trusted     Boolean  @default(false)
+  trustedAt   DateTime?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([userId, deviceId])
+  @@index([userId, lastSeenAt])
+  @@map("trusted_devices")
+}
+
+/// Sự kiện bảo mật: device mới, IP lạ, locked, password change, 2FA enable/disable...
+/// Hiển thị trong /settings/security cho user theo dõi.
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "NEW_DEVICE" | "NEW_LOCATION" | "ACCOUNT_LOCKED" | "PASSWORD_CHANGED" | "2FA_ENABLED" | "2FA_DISABLED" | "SESSION_REVOKED" | "SUSPICIOUS_LOGIN" | "IMPOSSIBLE_TRAVEL"
+  eventType   String
+  severity    String   @default("info") // "info" | "warning" | "critical"
+  /// Mô tả ngắn hiển thị UI
+  description String   @db.Text
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  /// JSON metadata bổ sung (deviceId, geoLocation, etc.)
+  metadata    Json?
+  /// Đã gửi email cảnh báo chưa
+  emailSent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([severity, createdAt])
+  @@map("security_events")
 }

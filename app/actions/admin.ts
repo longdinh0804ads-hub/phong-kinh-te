@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/session";
 import { isSuperAdmin } from "@/lib/permissions";
+import { hashPassword, generateTempPassword as genTempPw } from "@/lib/crypto/password";
 import {
   setSetting,
   deleteSetting,
@@ -414,24 +414,67 @@ export async function resetUserPassword(userId: string): Promise<{
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target) return { success: false, error: "Không tìm thấy tài khoản" };
 
-  // Tạo password tạm 12 ký tự
-  const newPassword = generateTempPassword();
-  const hash = await bcrypt.hash(newPassword, 10);
+  // Tạo password tạm 16 ký tự đủ phức tạp + hash argon2id + pepper
+  const newPassword = genTempPw(16);
+  const hash = await hashPassword(newPassword);
 
-  // Update password ở account của Better Auth (provider="credential")
-  await db.account.updateMany({
-    where: { userId, providerId: "credential" },
-    data: { password: hash },
-  });
+  // Update password ở account Better Auth (provider="credential")
+  // + ép user phải đổi password lần đăng nhập tiếp + reset lockout
+  await db.$transaction([
+    db.account.updateMany({
+      where: { userId, providerId: "credential" },
+      data: { password: hash },
+    }),
+    db.user.update({
+      where: { id: userId },
+      data: {
+        mustChangePassword: true,
+        passwordChangedAt: new Date(),
+        failedLoginCount: 0,
+        lockedUntil: null,
+        lockReason: null,
+      },
+    }),
+    // Revoke tất cả session của user đó (buộc đăng nhập lại với password mới)
+    db.session.deleteMany({ where: { userId } }),
+  ]);
 
   await logAdminAction({
     adminId: admin.id,
     action: "user:reset-password",
     target: userId,
-    details: { targetName: target.name, targetEmail: target.email },
+    details: { targetName: target.name },
   });
 
   return { success: true, newPassword };
+}
+
+/** Admin mở khóa tài khoản (sau khi user bị lock vì brute-force). */
+export async function adminUnlockAccount(userId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const admin = await requireSuperAdmin();
+  const target = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, lockedUntil: true },
+  });
+  if (!target) return { success: false, error: "Không tìm thấy tài khoản" };
+
+  await db.user.update({
+    where: { id: userId },
+    data: { failedLoginCount: 0, lockedUntil: null, lockReason: null },
+  });
+
+  await logAdminAction({
+    adminId: admin.id,
+    action: "user:unlock",
+    target: userId,
+    details: { targetName: target.name, previousLockedUntil: target.lockedUntil },
+  });
+
+  revalidatePath("/admin/users");
+  return { success: true };
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {
@@ -507,15 +550,4 @@ export async function forceLogoutAll() {
   return { success: true, count: result.count };
 }
 
-// =====================================================
-// Helpers
-// =====================================================
-
-function generateTempPassword(): string {
-  // 12 ký tự: letters + digits + 1 special
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < 11; i++) pw += chars[Math.floor(Math.random() * chars.length)];
-  pw += "!"; // đảm bảo có ký tự đặc biệt cho password policy
-  return pw;
-}
+// Helper generateTempPassword đã chuyển sang lib/crypto/password.ts (genTempPw)

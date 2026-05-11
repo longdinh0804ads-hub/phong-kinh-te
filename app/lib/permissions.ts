@@ -186,6 +186,20 @@ export function isDeptManager(role: Role): boolean {
 }
 
 /** Chuyên viên hoặc nhân viên - chỉ quyền cá nhân */
+/**
+ * 2FA bắt buộc cho role: SUPER_ADMIN, TRUONG_PHONG, PHO_TP, TRUONG_BO_PHAN.
+ * Lý do: 4 role này có quyền truy cập dữ liệu nhạy cảm + ra quyết định nghiệp vụ.
+ * CHUYEN_VIEN/NHAN_VIEN: tùy chọn bật.
+ */
+export function require2FA(role: Role): boolean {
+  return (
+    role === "SUPER_ADMIN" ||
+    role === "TRUONG_PHONG" ||
+    role === "PHO_TP" ||
+    role === "TRUONG_BO_PHAN"
+  );
+}
+
 export function isStaff(role: Role): boolean {
   return role === "CHUYEN_VIEN" || role === "NHAN_VIEN";
 }

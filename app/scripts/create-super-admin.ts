@@ -17,11 +17,11 @@ if (fs.existsSync(envFile)) {
 }
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../lib/crypto/password";
 
 const ADMIN_EMAIL = "admin@phongkinhte-tranphu.vn";
 const ADMIN_NAME = "Quản trị hệ thống";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "AdminPKT2026!";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "AdminPKT@2026Strong#";
 
 async function main() {
   const db = new PrismaClient();
@@ -40,7 +40,7 @@ async function main() {
     process.exit(0);
   }
 
-  const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  const hash = await hashPassword(ADMIN_PASSWORD);
 
   const user = await db.user.create({
     data: {

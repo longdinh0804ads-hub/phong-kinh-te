@@ -1,9 +1,10 @@
 import { PrismaClient, Role, Department } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../lib/crypto/password";
 
 const db = new PrismaClient();
 
-const DEFAULT_PASSWORD = "ChangeMe@2026";
+// Password tạm cho seed (đủ policy 12 chars + 4 loại). User PHẢI đổi sau lần login đầu.
+const DEFAULT_PASSWORD = "ChangeMe@2026Strong";
 
 interface SeedUser {
   email: string;
@@ -344,7 +345,7 @@ async function main() {
 
   // 2. Tạo 21 users
   console.log("👥 Tạo 21 users...");
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+  const passwordHash = await hashPassword(DEFAULT_PASSWORD);
 
   for (const userData of USERS) {
     const user = await db.user.upsert({

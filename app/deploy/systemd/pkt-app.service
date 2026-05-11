@@ -1,0 +1,72 @@
+# =============================================================================
+# Systemd service cho Next.js Loha PKT
+# =============================================================================
+# Vị trí: /etc/systemd/system/pkt-app.service
+# Enable: sudo systemctl daemon-reload && sudo systemctl enable --now pkt-app
+# Status: sudo systemctl status pkt-app
+# Log:    sudo journalctl -u pkt-app -f
+# =============================================================================
+
+[Unit]
+Description=PKT Trần Phú - Next.js App
+Documentation=https://pkt-tranphu.vn/docs
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=loha
+Group=loha
+WorkingDirectory=/opt/loha/app
+
+# Load env từ file (NOT /etc/environment - file riêng để dễ rotate)
+EnvironmentFile=/etc/loha/app.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+ExecStart=/usr/bin/node /opt/loha/app/.next/standalone/server.js
+
+# Restart on crash
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=60s
+StartLimitBurst=5
+
+# Security hardening (systemd-analyze security pkt-app)
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Read-only filesystem trừ thư mục cần ghi
+ReadWritePaths=/opt/loha/app/.next /opt/loha/app/public/uploads /var/log/loha
+ReadOnlyPaths=/etc/loha/keys
+
+# Capability hardening
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=
+
+# Resource limits
+LimitNOFILE=4096
+MemoryMax=2G
+TasksMax=200
+
+# Log → journald (rotation tự động)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pkt-app
+
+[Install]
+WantedBy=multi-user.target
