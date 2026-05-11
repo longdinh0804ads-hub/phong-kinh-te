@@ -76,6 +76,11 @@ async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
       generationConfig: {
         maxOutputTokens: opts.maxTokens ?? 4000,
         temperature: 0.2,
+        // Tắt thinking budget cho Gemini 2.5 Flash.
+        // Thinking mode đôi khi quyết định KHÔNG gọi tool (chỉ thinking + trả empty),
+        // gây conversation rỗng. Tắt cho tool-calling deterministic hơn.
+        // @ts-ignore - thinkingConfig là field mới của Gemini 2.5
+        thinkingConfig: { thinkingBudget: 0 },
       },
       tools: fnDecls.length > 0 ? [{ functionDeclarations: fnDecls as any }] : undefined,
       toolConfig: {

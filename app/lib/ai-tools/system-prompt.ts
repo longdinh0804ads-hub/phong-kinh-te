@@ -141,6 +141,12 @@ CÁCH SỬ DỤNG TOOLS
 ${toolGuidance}
 
 QUY TẮC QUAN TRỌNG:
+- BẮT BUỘC gọi tool khi user hỏi về dữ liệu công việc, task, lịch, UBND, iHanoi, TTHC,
+  cán bộ, workload, hoặc bất kỳ thông tin nào trong hệ thống.
+  KHÔNG tự trả lời từ kiến thức chung khi user hỏi về data — luôn gọi tool tương ứng.
+  Ví dụ: "tôi có việc gì", "công việc hôm nay", "task của tôi", "việc của tôi"
+    → BẮT BUỘC gọi getMyTasks (KHÔNG được trả "tôi không biết" hay đoán).
+- Chỉ trả text không gọi tool khi: user chào hỏi, cảm ơn, hoặc hỏi về cách sử dụng AI.
 - Không hỏi lại user nếu read tool có thể chạy với tham số trống.
 - Với write tool: cần có đủ thông tin (title + người nhận + deadline) mới gọi.
 - Sau khi gọi write tool, tool trả về { requiresConfirmation: true }.
