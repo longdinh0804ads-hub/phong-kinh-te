@@ -14,7 +14,7 @@ import {
 } from "@/lib/system-settings";
 import { reloadRotators } from "@/lib/api-key-rotator";
 import { runRiskScan } from "@/lib/ai-monitor/scanner";
-import { checkAllProviders, checkProviderKeys, type Provider } from "@/lib/api-key-health";
+import { checkAllProviders, checkProviderKeys, getAllKeys, type Provider } from "@/lib/api-key-health";
 import { headers } from "next/headers";
 
 // =====================================================
@@ -105,6 +105,151 @@ export async function updateApiKey(input: z.infer<typeof apiKeySchema>) {
 
   revalidatePath("/admin/api-keys");
   return { success: true };
+}
+
+/**
+ * APPEND mode: thêm 1 hoặc nhiều key mới vào pool hiện có.
+ * Input value có thể chứa nhiều key (comma/semicolon/newline separated).
+ * Dedupe với keys hiện có, save merged list vào setting.
+ */
+const apiKeyAppendSchema = z.object({
+  provider: z.enum(["gemini", "deepseek", "anthropic"]),
+  value: z.string().min(10).max(5000),
+});
+
+export async function appendApiKeys(input: z.infer<typeof apiKeyAppendSchema>): Promise<{
+  success: boolean;
+  added?: number;
+  duplicates?: number;
+  total?: number;
+  error?: string;
+}> {
+  const admin = await requireSuperAdmin();
+  const data = apiKeyAppendSchema.parse(input);
+
+  // Parse keys mới từ input
+  const newKeys = data.value
+    .split(/[,;\n\r]+/)
+    .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+    .filter((s) => s.length >= 10);
+
+  if (newKeys.length === 0) {
+    return { success: false, error: "Không tìm thấy key hợp lệ (tối thiểu 10 ký tự)" };
+  }
+
+  // Lấy keys hiện có
+  const existing = await getAllKeys(data.provider);
+  const existingSet = new Set(existing);
+
+  // Dedupe
+  const toAdd: string[] = [];
+  let duplicates = 0;
+  for (const k of newKeys) {
+    if (existingSet.has(k)) {
+      duplicates++;
+    } else {
+      toAdd.push(k);
+      existingSet.add(k);
+    }
+  }
+
+  if (toAdd.length === 0) {
+    return { success: false, error: `Tất cả ${duplicates} key đều đã tồn tại trong pool`, duplicates };
+  }
+
+  // Save merged list vào setting tương ứng (PLURAL key cho multi-key support)
+  const settingKey =
+    data.provider === "gemini"
+      ? "GEMINI_API_KEYS"
+      : data.provider === "deepseek"
+      ? "DEEPSEEK_API_KEYS"
+      : "ANTHROPIC_API_KEYS";
+
+  const merged = Array.from(existingSet);
+  await setSetting(settingKey, merged.join(","), {
+    updatedById: admin.id,
+    isEncrypted: true,
+    category: "ai-keys",
+    description: `Pool ${merged.length} keys cho ${data.provider}`,
+  });
+
+  await reloadRotators();
+
+  // Auto trigger health check provider để có status cho key mới
+  checkProviderKeys(data.provider).catch((e) =>
+    console.error(`[admin] auto health check fail:`, e?.message)
+  );
+
+  await logAdminAction({
+    adminId: admin.id,
+    action: "settings:append-api-keys",
+    target: settingKey,
+    details: { added: toAdd.length, duplicates, total: merged.length },
+  });
+
+  revalidatePath("/admin/api-keys");
+  return { success: true, added: toAdd.length, duplicates, total: merged.length };
+}
+
+/**
+ * Xóa 1 key khỏi pool theo keyIndex (vị trí trong danh sách hiện tại).
+ * Nếu xóa hết key → setting cũng bị xóa (fallback về env).
+ */
+export async function removeApiKeyByIndex(input: {
+  provider: Provider;
+  keyIndex: number;
+}): Promise<{ success: boolean; remaining?: number; error?: string }> {
+  const admin = await requireSuperAdmin();
+
+  const existing = await getAllKeys(input.provider);
+  if (input.keyIndex < 0 || input.keyIndex >= existing.length) {
+    return { success: false, error: "Index không hợp lệ" };
+  }
+
+  const removed = existing[input.keyIndex];
+  const remaining = existing.filter((_, i) => i !== input.keyIndex);
+
+  const settingKey =
+    input.provider === "gemini"
+      ? "GEMINI_API_KEYS"
+      : input.provider === "deepseek"
+      ? "DEEPSEEK_API_KEYS"
+      : "ANTHROPIC_API_KEYS";
+
+  if (remaining.length === 0) {
+    // Xóa setting → fallback về env nếu có
+    await deleteSetting(settingKey);
+  } else {
+    await setSetting(settingKey, remaining.join(","), {
+      updatedById: admin.id,
+      isEncrypted: true,
+      category: "ai-keys",
+      description: `Pool ${remaining.length} keys cho ${input.provider}`,
+    });
+  }
+
+  await reloadRotators();
+
+  // Xóa health check + usage record của key đó
+  const removedPrefix = removed.slice(0, 10);
+  await db.apiKeyHealthCheck.deleteMany({
+    where: { provider: input.provider, keyPrefix: removedPrefix },
+  });
+
+  // Re-check để update keyIndex của các key còn lại
+  checkProviderKeys(input.provider).catch((e) =>
+    console.error(`[admin] auto health check fail:`, e?.message)
+  );
+
+  await logAdminAction({
+    adminId: admin.id,
+    action: "settings:remove-api-key",
+    target: settingKey,
+    details: { keyIndex: input.keyIndex, removedPrefix, remaining: remaining.length },
+  });
+
+  revalidatePath("/admin/api-keys");
+  return { success: true, remaining: remaining.length };
 }
 
 export async function deleteApiKey(key: string) {

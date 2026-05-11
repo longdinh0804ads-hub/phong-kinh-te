@@ -203,13 +203,22 @@ function ProviderCard({
               records={healthRecords}
               stats={stats}
               model={model}
+              provider={provider}
               rateLimit={rateLimit}
             />
           </div>
         )}
 
         <div>
-          <div className="text-xs font-semibold text-muted-foreground mb-2">Update key mới:</div>
+          <div className="text-xs font-semibold text-muted-foreground mb-2">
+            Thêm / Cập nhật API key:
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            <strong>Thêm vào pool</strong>: append key mới, giữ key cũ (an toàn).
+            <br />
+            <strong>Thay toàn bộ</strong>: xóa hết key cũ, dùng key mới (nguy hiểm - chỉ dùng khi
+            cần reset).
+          </p>
           <ApiKeyForm keyName={keyName} provider={provider} />
         </div>
       </CardContent>

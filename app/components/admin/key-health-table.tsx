@@ -2,11 +2,13 @@ import { CheckCircle2, XCircle, Clock, WifiOff, HelpCircle } from "lucide-react"
 import { formatRelative } from "@/lib/utils";
 import type { KeyHealthRecord } from "@/lib/api-key-health";
 import type { KeyStats } from "@/lib/api-key-usage";
+import { KeyRowDelete } from "./key-row-delete";
 
 interface Props {
   records: KeyHealthRecord[];
   stats: KeyStats[];
   model: string;
+  provider: "gemini" | "deepseek" | "anthropic";
   /** API quota / rate limit nếu có (vd "60 RPM" cho Gemini free) */
   rateLimit?: string;
 }
@@ -58,7 +60,7 @@ function formatTokens(n: number): string {
   return (n / 1_000_000).toFixed(1) + "M";
 }
 
-export function KeyHealthTable({ records, stats, model, rateLimit }: Props) {
+export function KeyHealthTable({ records, stats, model, provider, rateLimit }: Props) {
   if (records.length === 0) {
     return (
       <p className="text-xs text-muted-foreground italic">
@@ -89,6 +91,7 @@ export function KeyHealthTable({ records, stats, model, rateLimit }: Props) {
               Limit hits
             </th>
             <th className="text-left py-2 pr-3">Check / Used</th>
+            <th className="text-center py-2"></th>
           </tr>
         </thead>
         <tbody>
@@ -165,6 +168,14 @@ export function KeyHealthTable({ records, stats, model, rateLimit }: Props) {
                       Dùng: {formatRelative(new Date(s.lastUsedAt))}
                     </div>
                   )}
+                </td>
+                <td className="py-2 text-center">
+                  <KeyRowDelete
+                    provider={provider}
+                    keyIndex={r.keyIndex}
+                    keyPrefix={r.keyPrefix}
+                    totalKeys={records.length}
+                  />
                 </td>
               </tr>
             );
