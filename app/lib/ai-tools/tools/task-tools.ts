@@ -8,6 +8,7 @@ import {
   isDeptManager,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 
 /**
  * Build where filter cho Task query theo role:
@@ -366,7 +367,7 @@ export const userWorkloadTool: ToolDefinition = {
     },
   },
   async execute(input, ctx) {
-    const userWhere: any = { isActive: true };
+    const userWhere: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
 
     if (input.userId) {
       userWhere.id = input.userId;

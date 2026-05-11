@@ -8,6 +8,7 @@ import {
   isLeader,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -96,14 +97,14 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   // Pre-load users + groups cho dialog "Sao chép task" nếu user có quyền giao việc.
   // TRUONG_BO_PHAN: chỉ user trong dept của mình.
   const canCopy = canAssignTask(user.role);
-  let copyUsersWhere: any = { isActive: true };
+  let copyUsersWhere: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
   if (isDeptManager(user.role)) {
     const managed = getManagedDepartments({
       role: user.role,
       department: user.department,
       managedDepartments: user.managedDepartments,
     });
-    copyUsersWhere = { isActive: true, department: { in: managed } };
+    copyUsersWhere = { isActive: true, ...EXCLUDE_SUPER_ADMIN, department: { in: managed } };
   }
   const copyUsers = canCopy
     ? await db.user.findMany({

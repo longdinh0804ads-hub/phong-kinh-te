@@ -7,6 +7,7 @@ import {
   isDeptManager,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { PageHeader } from "@/components/layout/page-header";
 import { TaskList } from "@/components/task/task-list";
 import { NewTaskDialog } from "@/components/task/new-task-dialog";
@@ -76,14 +77,14 @@ export default async function TasksPage({
   // - TP/PTP: tất cả user active
   // - TRUONG_BO_PHAN: chỉ user trong dept (kể cả managedDepartments)
   // - CHUYEN_VIEN/NHAN_VIEN: không có dropdown (không được tạo task)
-  let usersWhere: any = { isActive: true };
+  let usersWhere: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
   if (isDeptManager(user.role)) {
     const managed = getManagedDepartments({
       role: user.role,
       department: user.department,
       managedDepartments: user.managedDepartments,
     });
-    usersWhere = { isActive: true, department: { in: managed } };
+    usersWhere = { isActive: true, ...EXCLUDE_SUPER_ADMIN, department: { in: managed } };
   }
   const users = canAssignTask(user.role)
     ? await db.user.findMany({

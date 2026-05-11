@@ -7,6 +7,7 @@ import {
   ROLE_LABELS,
   DEPARTMENT_LABELS,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default async function PerformanceReportPage() {
 
   // TRUONG_BO_PHAN chỉ xem cán bộ BỘ PHẬN mình (không phải teamGroupCode!)
   const isFullScope = isTopLeader(user.role);
-  const userWhere: any = { isActive: true };
+  const userWhere: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
   const managedDepts = !isFullScope
     ? getManagedDepartments({
         role: user.role,

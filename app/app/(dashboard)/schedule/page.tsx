@@ -5,6 +5,7 @@ import {
   isDeptManager,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleForm } from "@/components/schedule/schedule-form";
@@ -36,7 +37,7 @@ export default async function SchedulePage({
   let users: { id: string; name: string; position: string }[] = [];
   if (isTopLeader(user.role)) {
     users = await db.user.findMany({
-      where: { isActive: true, id: { not: user.id } },
+      where: { isActive: true, id: { not: user.id }, ...EXCLUDE_SUPER_ADMIN },
       select: { id: true, name: true, position: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     });
@@ -50,6 +51,7 @@ export default async function SchedulePage({
       where: {
         isActive: true,
         id: { not: user.id },
+        ...EXCLUDE_SUPER_ADMIN,
         department: { in: managed },
       },
       select: { id: true, name: true, position: true },

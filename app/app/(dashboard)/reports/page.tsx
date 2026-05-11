@@ -7,6 +7,7 @@ import {
   getManagedDepartments,
   DEPARTMENT_LABELS,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +30,7 @@ export default async function ReportsPage() {
 
   // Filter scope cho task: TRUONG_BO_PHAN chỉ thấy task assigned/created by người trong dept mình
   const taskWhere: any = { deletedAt: null };
-  const userWhere: any = { isActive: true };
+  const userWhere: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
   if (!isFullScope && managedDepts.length > 0) {
     taskWhere.OR = [
       { assignee: { department: { in: managedDepts } } },

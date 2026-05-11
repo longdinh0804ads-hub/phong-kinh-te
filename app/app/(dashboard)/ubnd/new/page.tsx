@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { UBNDForm } from "@/components/ubnd/ubnd-form";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 
 export default async function NewUBNDPage() {
   await requirePermission("ubnd:create");
 
   const users = await db.user.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...EXCLUDE_SUPER_ADMIN },
     select: { id: true, name: true, position: true, department: true },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });

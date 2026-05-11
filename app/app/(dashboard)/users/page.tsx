@@ -9,6 +9,7 @@ import {
   isDeptManager,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,15 +28,15 @@ export default async function UsersPage() {
   }
 
   // Scope where
-  let where: any = { isActive: true };
+  // Loại trừ SUPER_ADMIN khỏi danh sách cán bộ (tài khoản kỹ thuật, không thuộc phòng)
+  let where: any = { isActive: true, ...EXCLUDE_SUPER_ADMIN };
   if (!canViewAll && canViewDept) {
-    // TRUONG_BO_PHAN: chỉ user trong dept của mình (kể cả managedDepartments)
     const managed = getManagedDepartments({
       role: user.role,
       department: user.department,
       managedDepartments: user.managedDepartments,
     });
-    where = { isActive: true, department: { in: managed } };
+    where = { isActive: true, ...EXCLUDE_SUPER_ADMIN, department: { in: managed } };
   }
 
   const users = await db.user.findMany({

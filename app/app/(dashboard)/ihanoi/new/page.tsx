@@ -8,7 +8,7 @@ export default async function NewIHanoiPage() {
   await requirePermission("ihanoi:assign");
 
   const users = await db.user.findMany({
-    where: { isActive: true, role: { not: "NHAN_VIEN" } },
+    where: { isActive: true, role: { notIn: ["NHAN_VIEN", "SUPER_ADMIN"] } },
     select: { id: true, name: true, position: true },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });

@@ -9,6 +9,7 @@ import {
   isDeptManager,
   getManagedDepartments,
 } from "@/lib/permissions";
+import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { ClipboardList, Clock, CheckCircle2, AlertTriangle, Users, Building, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
@@ -52,12 +53,14 @@ export default async function DashboardPage() {
   ]);
 
   // totalUsers: TP/PTP all, TRUONG_BO_PHAN trong dept, staff không thấy
+  // EXCLUDE_SUPER_ADMIN: tài khoản kỹ thuật, không thuộc nghiệp vụ phòng
   const totalUsers = isTop
-    ? await db.user.count({ where: { isActive: true } })
+    ? await db.user.count({ where: { isActive: true, ...EXCLUDE_SUPER_ADMIN } })
     : isDept
     ? await db.user.count({
         where: {
           isActive: true,
+          ...EXCLUDE_SUPER_ADMIN,
           department: {
             in: getManagedDepartments({
               role: user.role,

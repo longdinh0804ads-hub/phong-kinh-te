@@ -365,7 +365,7 @@ export async function runRiskScan(): Promise<ScanResult> {
   // ====== STEP 5: OVERLOAD - cán bộ > 10 task ======
   try {
     const users = await db.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: { not: "SUPER_ADMIN" } },
       select: {
         id: true,
         name: true,
