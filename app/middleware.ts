@@ -27,6 +27,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Note: chặn /admin theo role được làm ở layout.tsx (cần query DB role).
+  // Middleware chỉ check authenticated; role check ở server layout sạch hơn.
   return NextResponse.next();
 }
 

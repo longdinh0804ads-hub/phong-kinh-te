@@ -1,12 +1,19 @@
+import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/session";
 import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Header } from "@/components/layout/header";
 import { db } from "@/lib/db";
 import { getSidebarBadges } from "@/lib/sidebar-badges";
+import { isSuperAdmin } from "@/lib/permissions";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
+
+  // Super admin → redirect /admin (không thuộc nghiệp vụ phòng)
+  if (isSuperAdmin(user.role)) {
+    redirect("/admin");
+  }
 
   // Fetch notification + sidebar badges song song
   const [notificationCount, badges] = await Promise.all([

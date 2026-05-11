@@ -3,7 +3,10 @@
 
 import OpenAI from "openai";
 import { GoogleGenerativeAI, FunctionCallingMode } from "@google/generative-ai";
-import { getGeminiRotator, getDeepSeekRotator } from "@/lib/api-key-rotator";
+import {
+  getGeminiRotatorAsync,
+  getDeepSeekRotatorAsync,
+} from "@/lib/api-key-rotator";
 import { AI_MODELS, type AIProvider, type ChatMessage } from "@/lib/ai";
 import {
   buildToolDefinitions,
@@ -65,7 +68,7 @@ function handleDryRunOutput(
 // Gemini agent loop
 // =====================================================
 async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
-  const rotator = getGeminiRotator();
+  const rotator = await getGeminiRotatorAsync();
   const fnDecls = buildGeminiFunctionDeclarations(opts.ctx.user.role);
 
   return rotator.runWithRotation(async (apiKey) => {
@@ -173,7 +176,7 @@ async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
 // DeepSeek agent loop (OpenAI-compatible function calling)
 // =====================================================
 async function runDeepSeekAgent(opts: AgentRunOptions): Promise<string> {
-  const rotator = getDeepSeekRotator();
+  const rotator = await getDeepSeekRotatorAsync();
   const tools = buildToolDefinitions(opts.ctx.user.role);
 
   return rotator.runWithRotation(async (apiKey) => {

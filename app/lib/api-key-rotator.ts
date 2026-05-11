@@ -174,11 +174,61 @@ function extractStatusCode(msg: string | undefined): number | undefined {
 // =====================================================
 // Singleton rotators per provider
 // =====================================================
+//
+// Mỗi rotator có 2 source thứ tự ưu tiên:
+//   1. SystemSetting (DB-backed, super admin update qua UI) — encrypted
+//   2. process.env.<KEY> (Vercel env vars, fallback)
+//
+// Rotator được rebuild khi cache settings expire (5 phút) hoặc khi admin
+// force reload qua reloadRotators().
+
+import { getSetting } from "./system-settings";
 
 let geminiRotator: APIKeyRotator | null = null;
 let anthropicRotator: APIKeyRotator | null = null;
 let deepseekRotator: APIKeyRotator | null = null;
+let rotatorsLoadedAt = 0;
+const ROTATOR_TTL_MS = 5 * 60 * 1000; // align với system-settings cache
 
+/** Build/rebuild rotators từ DB settings + env fallback */
+async function ensureRotators(): Promise<void> {
+  const now = Date.now();
+  if (geminiRotator && now - rotatorsLoadedAt < ROTATOR_TTL_MS) return;
+
+  // Đọc settings từ DB (fallback env tự xử lý trong getSetting)
+  const [geminiKeys, geminiKey, anthropicKeys, anthropicKey, deepseekKeys, deepseekKey] =
+    await Promise.all([
+      getSetting("GEMINI_API_KEYS"),
+      getSetting("GEMINI_API_KEY"),
+      getSetting("ANTHROPIC_API_KEYS"),
+      getSetting("ANTHROPIC_API_KEY"),
+      getSetting("DEEPSEEK_API_KEYS"),
+      getSetting("DEEPSEEK_API_KEY"),
+    ]);
+
+  geminiRotator = new APIKeyRotator("Gemini", [
+    geminiKeys || undefined,
+    geminiKey || undefined,
+  ]);
+  anthropicRotator = new APIKeyRotator("Anthropic", [
+    anthropicKeys || undefined,
+    anthropicKey || undefined,
+  ]);
+  deepseekRotator = new APIKeyRotator("DeepSeek", [
+    deepseekKeys || undefined,
+    deepseekKey || undefined,
+  ]);
+  rotatorsLoadedAt = now;
+}
+
+/**
+ * SYNCHRONOUS getter - dùng cho code path hiện hữu (vd ai.ts streamChat).
+ * Lazy init: lần đầu gọi sẽ dùng ENV ONLY (vì DB load async).
+ * Background sẽ rebuild với DB values sau khi route async-trigger ensureRotators.
+ *
+ * Pattern khuyến nghị: gọi ensureRotators() ở đầu API route trước, rồi
+ * sync getter sẽ trả rotator đã được populate từ DB.
+ */
 export function getGeminiRotator(): APIKeyRotator {
   if (!geminiRotator) {
     geminiRotator = new APIKeyRotator("Gemini", [
@@ -209,9 +259,33 @@ export function getDeepSeekRotator(): APIKeyRotator {
   return deepseekRotator;
 }
 
+/** Async getter - đảm bảo rotator đã được load từ DB. Khuyến nghị dùng trong API routes. */
+export async function getGeminiRotatorAsync(): Promise<APIKeyRotator> {
+  await ensureRotators();
+  return geminiRotator!;
+}
+export async function getAnthropicRotatorAsync(): Promise<APIKeyRotator> {
+  await ensureRotators();
+  return anthropicRotator!;
+}
+export async function getDeepSeekRotatorAsync(): Promise<APIKeyRotator> {
+  await ensureRotators();
+  return deepseekRotator!;
+}
+
+/** Force reload rotators từ DB ngay (admin gọi sau khi update key). */
+export async function reloadRotators(): Promise<void> {
+  rotatorsLoadedAt = 0;
+  geminiRotator = null;
+  anthropicRotator = null;
+  deepseekRotator = null;
+  await ensureRotators();
+}
+
 /** Reset singletons (cho testing). */
 export function resetRotators() {
   geminiRotator = null;
   anthropicRotator = null;
   deepseekRotator = null;
+  rotatorsLoadedAt = 0;
 }

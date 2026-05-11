@@ -1,6 +1,7 @@
 import type { Role, Department } from "@prisma/client";
 
 export const ROLES = {
+  SUPER_ADMIN: "SUPER_ADMIN",
   TRUONG_PHONG: "TRUONG_PHONG",
   PHO_TP: "PHO_TP",
   TRUONG_BO_PHAN: "TRUONG_BO_PHAN",
@@ -9,6 +10,7 @@ export const ROLES = {
 } as const;
 
 export const ROLE_LABELS: Record<Role, string> = {
+  SUPER_ADMIN: "Quản trị hệ thống",
   TRUONG_PHONG: "Trưởng phòng",
   PHO_TP: "Phó Trưởng phòng",
   TRUONG_BO_PHAN: "Trưởng bộ phận",
@@ -17,6 +19,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 export const ROLE_LEVELS: Record<Role, number> = {
+  SUPER_ADMIN: 0,
   TRUONG_PHONG: 1,
   PHO_TP: 2,
   TRUONG_BO_PHAN: 3,
@@ -41,6 +44,12 @@ export const DEPARTMENT_LABELS = {
  *   :own  = chỉ liên quan trực tiếp user (assignee/handler/creator = user)
  */
 export type Permission =
+  // ADMIN (super admin only - tech ops)
+  | "admin:settings"     // Quản lý API keys + system settings
+  | "admin:users"        // Reset password, lock/unlock, change role
+  | "admin:audit"        // Xem audit logs
+  | "admin:health"       // Xem health dashboard
+  | "admin:maintenance"  // Clear cache, trigger cron, force logout
   // TASK
   | "task:create"
   | "task:assign:all"
@@ -91,6 +100,14 @@ export type Permission =
   | "schedule:manage:own";
 
 export const PERMISSION_MATRIX: Record<Role, Permission[]> = {
+  SUPER_ADMIN: [
+    // CHỈ quyền admin - KHÔNG có quyền nghiệp vụ (task, ubnd, ...)
+    "admin:settings",
+    "admin:users",
+    "admin:audit",
+    "admin:health",
+    "admin:maintenance",
+  ],
   TRUONG_PHONG: [
     // FULL ADMIN
     "task:create", "task:assign:all", "task:view:all", "task:approve", "task:delete",
@@ -151,6 +168,11 @@ export const PERMISSION_MATRIX: Record<Role, Permission[]> = {
 
 export function hasPermission(role: Role, permission: Permission): boolean {
   return PERMISSION_MATRIX[role]?.includes(permission) ?? false;
+}
+
+/** Super admin - quản trị kỹ thuật, KHÔNG thuộc nghiệp vụ phòng */
+export function isSuperAdmin(role: Role): boolean {
+  return role === "SUPER_ADMIN";
 }
 
 /** TP hoặc Phó TP - toàn quyền phòng */

@@ -18,6 +18,7 @@ datasource db {
 // =====================================================
 
 enum Role {
+  SUPER_ADMIN     // Cấp 0 - Quản trị hệ thống (kỹ thuật, không thuộc nghiệp vụ)
   TRUONG_PHONG    // Cấp 1 - Trưởng phòng
   PHO_TP          // Cấp 2 - Phó Trưởng phòng
   TRUONG_BO_PHAN  // Cấp 3 - Trưởng bộ phận
@@ -107,6 +108,8 @@ model User {
   createdTasks      Task[]            @relation("TaskCreator")
   confirmedTasks    Task[]            @relation("TaskConfirmer")
   authoredNotes     TaskNote[]        @relation("TaskNoteAuthor")
+  updatedSettings   SystemSetting[]
+  adminAuditLogs    AdminAuditLog[]
   progressReports   ProgressReport[]
   workSchedules     WorkSchedule[]
   chatHistories     ChatHistory[]
@@ -500,6 +503,41 @@ model Notification {
 // =====================================================
 // AI AGENT AUDIT LOG
 // =====================================================
+
+/// SystemSetting: key-value store cho cấu hình runtime (vd API keys, SMTP, thresholds).
+/// Value encrypted bằng AES-256-GCM với BETTER_AUTH_SECRET. Đọc qua lib/system-settings.ts.
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text  // ciphertext (base64) nếu isEncrypted=true
+  isEncrypted Boolean  @default(true)
+  description String?
+  category    String?  // "ai-keys", "smtp", "rate-limit", "general"
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+  @@map("system_settings")
+}
+
+/// Audit log riêng cho hành động của SUPER_ADMIN (khác AIAuditLog cho user nghiệp vụ).
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  action     String   // "settings:update", "user:reset-password", "user:lock", "user:unlock", "maintenance:clear-cache"
+  target     String?  // ID hoặc tên đối tượng bị tác động (userId, settingKey, ...)
+  details    Json?    // metadata thêm (trước/sau, lý do)
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+  @@map("admin_audit_logs")
+}
 
 model AIAuditLog {
   id        String   @id @default(cuid())

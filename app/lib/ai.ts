@@ -8,6 +8,9 @@ import {
   getAnthropicRotator,
   getGeminiRotator,
   getDeepSeekRotator,
+  getAnthropicRotatorAsync,
+  getGeminiRotatorAsync,
+  getDeepSeekRotatorAsync,
 } from "./api-key-rotator";
 
 export type AIProvider = "anthropic" | "gemini" | "deepseek";
@@ -118,7 +121,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
 
 // ===== Anthropic Claude =====
 async function streamAnthropic(opts: StreamChatOptions): Promise<string> {
-  const rotator = getAnthropicRotator();
+  const rotator = await getAnthropicRotatorAsync();
   const messages = resolveMessages(opts);
   return rotator.runWithRotation(async (apiKey) => {
     const client = new Anthropic({ apiKey });
@@ -142,7 +145,7 @@ async function streamAnthropic(opts: StreamChatOptions): Promise<string> {
 
 // ===== Google Gemini =====
 async function streamGemini(opts: StreamChatOptions): Promise<string> {
-  const rotator = getGeminiRotator();
+  const rotator = await getGeminiRotatorAsync();
   const messages = resolveMessages(opts);
   return rotator.runWithRotation(async (apiKey) => {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -179,7 +182,7 @@ async function streamGemini(opts: StreamChatOptions): Promise<string> {
 
 // ===== DeepSeek (OpenAI-compatible) =====
 async function streamDeepSeek(opts: StreamChatOptions): Promise<string> {
-  const rotator = getDeepSeekRotator();
+  const rotator = await getDeepSeekRotatorAsync();
   const inputMessages = resolveMessages(opts);
   return rotator.runWithRotation(async (apiKey) => {
     const client = new OpenAI({
