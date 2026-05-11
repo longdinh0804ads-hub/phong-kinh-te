@@ -7,6 +7,8 @@ import {
   getGeminiRotatorAsync,
   getDeepSeekRotatorAsync,
 } from "@/lib/api-key-rotator";
+import { recordUsage } from "@/lib/api-key-usage";
+import { maskKey } from "@/lib/api-key-health";
 import { AI_MODELS, type AIProvider, type ChatMessage } from "@/lib/ai";
 import {
   buildToolDefinitions,
@@ -67,11 +69,28 @@ function handleDryRunOutput(
 // =====================================================
 // Gemini agent loop
 // =====================================================
+function classifyError(e: any): "rate_limited" | "invalid" | "network" | "timeout" | "other" {
+  const status = e?.status || e?.response?.status || 0;
+  const msg = (e?.message || "").toLowerCase();
+  if (status === 429 || /rate.{0,5}limit|quota|too.{0,3}many/i.test(msg)) return "rate_limited";
+  if (status === 401 || status === 403 || /unauthorized|invalid.{0,5}key|forbidden/i.test(msg)) return "invalid";
+  if (/network|fetch|econn|enotfound/i.test(msg)) return "network";
+  if (/timeout|aborted/i.test(msg)) return "timeout";
+  return "other";
+}
+
 async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
   const rotator = await getGeminiRotatorAsync();
   const fnDecls = buildGeminiFunctionDeclarations(opts.ctx.user.role);
 
   return rotator.runWithRotation(async (apiKey) => {
+    const keyPrefix = maskKey(apiKey);
+    const startTime = Date.now();
+    // Track tokens across iterations
+    let totalPrompt = 0;
+    let totalCompletion = 0;
+    let totalTotal = 0;
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: AI_MODELS.gemini.model,
@@ -105,9 +124,18 @@ async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
     let lastInput: any = opts.messages[lastIdx].content;
     let finalText = "";
 
+    try {
     for (let iter = 0; iter < MAX_AGENT_ITERATIONS; iter++) {
       const result = await chat.sendMessage(lastInput);
       const response = result.response;
+
+      // Track tokens cho iter này
+      const usage = (response as any).usageMetadata;
+      if (usage) {
+        totalPrompt += usage.promptTokenCount || 0;
+        totalCompletion += usage.candidatesTokenCount || 0;
+        totalTotal += usage.totalTokenCount || 0;
+      }
 
       // Gemini SDK: response.functionCalls() trả array các function call
       const fnCalls = response.functionCalls?.() || [];
@@ -137,6 +165,16 @@ async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
         }
         finalText = text;
         opts.onText(text);
+        recordUsage({
+          provider: "gemini",
+          keyPrefix,
+          model: AI_MODELS.gemini.model,
+          promptTokens: totalPrompt,
+          completionTokens: totalCompletion,
+          totalTokens: totalTotal,
+          success: true,
+          latencyMs: Date.now() - startTime,
+        });
         return finalText;
       }
 
@@ -168,7 +206,32 @@ async function runGeminiAgent(opts: AgentRunOptions): Promise<string> {
       lastInput = fnResponses;
     }
 
+    // Hết MAX_AGENT_ITERATIONS - record usage (vẫn success vì không throw)
+    recordUsage({
+      provider: "gemini",
+      keyPrefix,
+      model: AI_MODELS.gemini.model,
+      promptTokens: totalPrompt,
+      completionTokens: totalCompletion,
+      totalTokens: totalTotal,
+      success: true,
+      latencyMs: Date.now() - startTime,
+    });
     return finalText || "Đã vượt quá số bước tối đa. Vui lòng đặt câu hỏi cụ thể hơn.";
+    } catch (e: any) {
+      recordUsage({
+        provider: "gemini",
+        keyPrefix,
+        model: AI_MODELS.gemini.model,
+        promptTokens: totalPrompt,
+        completionTokens: totalCompletion,
+        totalTokens: totalTotal,
+        success: false,
+        errorType: classifyError(e),
+        latencyMs: Date.now() - startTime,
+      });
+      throw e;
+    }
   });
 }
 
@@ -180,6 +243,13 @@ async function runDeepSeekAgent(opts: AgentRunOptions): Promise<string> {
   const tools = buildToolDefinitions(opts.ctx.user.role);
 
   return rotator.runWithRotation(async (apiKey) => {
+    const keyPrefix = maskKey(apiKey);
+    const startTime = Date.now();
+    let totalPrompt = 0;
+    let totalCompletion = 0;
+    let totalTotal = 0;
+
+    try {
     const client = new OpenAI({
       apiKey,
       baseURL: "https://api.deepseek.com/v1",
@@ -202,6 +272,14 @@ async function runDeepSeekAgent(opts: AgentRunOptions): Promise<string> {
         temperature: 0.2,
         max_tokens: opts.maxTokens ?? 4000,
       });
+
+      // Track tokens
+      const u = (completion as any).usage;
+      if (u) {
+        totalPrompt += u.prompt_tokens || 0;
+        totalCompletion += u.completion_tokens || 0;
+        totalTotal += u.total_tokens || 0;
+      }
 
       const msg = completion.choices[0]?.message;
       if (!msg) break;
@@ -249,9 +327,43 @@ async function runDeepSeekAgent(opts: AgentRunOptions): Promise<string> {
         finalText = msg.content;
         opts.onText(msg.content);
       }
+      recordUsage({
+        provider: "deepseek",
+        keyPrefix,
+        model: AI_MODELS.deepseek.model,
+        promptTokens: totalPrompt,
+        completionTokens: totalCompletion,
+        totalTokens: totalTotal,
+        success: true,
+        latencyMs: Date.now() - startTime,
+      });
       return finalText;
     }
 
+    recordUsage({
+      provider: "deepseek",
+      keyPrefix,
+      model: AI_MODELS.deepseek.model,
+      promptTokens: totalPrompt,
+      completionTokens: totalCompletion,
+      totalTokens: totalTotal,
+      success: true,
+      latencyMs: Date.now() - startTime,
+    });
     return finalText || "Đã vượt quá số bước tối đa. Vui lòng đặt câu hỏi cụ thể hơn.";
+    } catch (e: any) {
+      recordUsage({
+        provider: "deepseek",
+        keyPrefix,
+        model: AI_MODELS.deepseek.model,
+        promptTokens: totalPrompt,
+        completionTokens: totalCompletion,
+        totalTokens: totalTotal,
+        success: false,
+        errorType: classifyError(e),
+        latencyMs: Date.now() - startTime,
+      });
+      throw e;
+    }
   });
 }

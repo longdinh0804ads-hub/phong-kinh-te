@@ -540,6 +540,29 @@ model ApiKeyHealthCheck {
   @@map("api_key_health_checks")
 }
 
+/// Tracking usage của từng API key qua thời gian (số request + tokens).
+/// Mỗi lần gọi LLM (success hoặc fail) ghi 1 record.
+/// Cleanup tự động sau 30 ngày (qua cron).
+model ApiKeyUsage {
+  id               String   @id @default(cuid())
+  provider         String   // "gemini" | "deepseek" | "anthropic"
+  keyIndex         Int      // position trong multi-key list
+  keyPrefix        String   // mask để identify (vd "AIzaSyA7Rr")
+  model            String   // model name (vd "gemini-2.5-flash")
+  promptTokens    Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  success          Boolean  @default(true)
+  errorType        String?  // "rate_limited" | "invalid" | "network" | "timeout" | "other"
+  latencyMs        Int?
+  createdAt        DateTime @default(now())
+
+  @@index([provider, createdAt])
+  @@index([keyPrefix, createdAt])
+  @@index([createdAt])
+  @@map("api_key_usage")
+}
+
 /// Audit log riêng cho hành động của SUPER_ADMIN (khác AIAuditLog cho user nghiệp vụ).
 model AdminAuditLog {
   id         String   @id @default(cuid())
