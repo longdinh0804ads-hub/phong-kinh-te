@@ -523,25 +523,31 @@ export async function runRiskScan(): Promise<ScanResult> {
   }
 
   // ====== STEP 8: Health check API keys (gộp vào cron để khỏi cần cron riêng) ======
+  // Lưu ý: KHÔNG notify TP/PTP/TBP về vấn đề API key - đây là thông tin
+  // CHỈ super admin được biết. Chỉ chạy health check để admin có data xem.
+  // Super admin tự kiểm tra qua /admin dashboard.
   try {
     const { checkAllProviders } = await import("@/lib/api-key-health");
     const health = await checkAllProviders();
-    // Notify TP/PTP nếu có key invalid (cần admin update)
+    // Chỉ notify SUPER_ADMIN nếu có key invalid
     if (health.failedKeys > 0) {
-      const topLeaders = await getLeaderIdsFor({ includeTopLeaders: true });
       const invalidProviders: string[] = [];
       for (const p of ["gemini", "deepseek", "anthropic"] as const) {
         const failed = health[p].filter((k) => k.status === "invalid");
         if (failed.length > 0) invalidProviders.push(p);
       }
       if (invalidProviders.length > 0) {
-        for (const userId of topLeaders) {
+        const admins = await db.user.findMany({
+          where: { role: "SUPER_ADMIN", isActive: true },
+          select: { id: true },
+        });
+        for (const a of admins) {
           const r = await createNotificationIfNew({
-            userId,
-            type: "RISK_OVERDUE" as any, // reuse type, custom message
+            userId: a.id,
+            type: "TASK_NOTE" as any, // reuse type, super admin will see custom message
             entityId: `api-key-${invalidProviders.join("-")}`,
             title: "🔑 API key cần update",
-            message: `Phát hiện key invalid: ${invalidProviders.join(", ")}. Vui lòng nhờ Quản trị hệ thống cập nhật.`,
+            message: `Phát hiện key invalid: ${invalidProviders.join(", ")}. Mở /admin/api-keys để xem chi tiết.`,
             link: "/admin/api-keys",
           });
           if (r === "created") result.notificationsCreated++;
