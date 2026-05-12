@@ -3,14 +3,14 @@
 //
 // Đặc thù VBPL: hỏi 1 câu thường liên quan tới CẢ ĐIỀU chứ không chỉ 1 Khoản đơn lẻ.
 // Pipeline:
-//   1. retrieveHybrid → top-12 candidate chunks
+//   1. retrieveEntityBoosted (hybrid + entity boost) → top-12 candidate chunks
 //   2. Group theo (documentId, article), tính aggregate score
 //   3. Pick top-3 articles
 //   4. Pull FULL Điều (tất cả Khoản) cho từng article
 //   5. Trả về danh sách "ArticleGroup" thay vì chunks rời rạc
 
 import { db } from "./db";
-import { retrieveHybrid } from "./rag-hybrid";
+import { retrieveEntityBoosted } from "./rag-entity-boosted";
 
 export interface ArticleGroup {
   documentId: string;
@@ -46,7 +46,7 @@ export async function retrieveWithArticleExpansion(
   query: string,
   maxArticles = MAX_ARTICLES
 ): Promise<ArticleGroup[]> {
-  const candidates = await retrieveHybrid(query, CANDIDATE_K);
+  const candidates = await retrieveEntityBoosted(query, CANDIDATE_K);
   if (candidates.length === 0) return [];
 
   // Group theo (documentId, article)
