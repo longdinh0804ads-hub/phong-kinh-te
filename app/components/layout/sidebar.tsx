@@ -48,6 +48,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Inbox,
     show: (r) => isTopLeader(r) || isDeptManager(r) || r === "SUPER_ADMIN",
   },
+  // Speech Writer AI: TP/PTP/TBP/Admin soạn bài phát biểu
+  {
+    label: "Soạn bài phát biểu (AI)",
+    href: "/documents/speech-writer",
+    icon: FileText,
+    show: (r) => isTopLeader(r) || isDeptManager(r) || r === "SUPER_ADMIN",
+  },
   // UBND: NHAN_VIEN xem được "own" - vẫn hiện menu để NV biết mục giao cho mình
   {
     label: "Nhiệm vụ UBND",

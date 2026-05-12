@@ -6,6 +6,7 @@ import type { ToolDefinition, ToolContext, ToolResult } from "./types";
 import { taskStatsTool, overdueTasksTool, myTasksTool, userWorkloadTool } from "./tools/task-tools";
 import { ubndDirectivesTool } from "./tools/ubnd-tools";
 import { searchLegalDocsTool } from "./tools/legal-tools";
+import { legalDeepResearchTool } from "./tools/legal-research-tool";
 import {
   createTaskTool,
   updateTaskStatusTool,
@@ -22,6 +23,7 @@ const TOOLS: ToolDefinition[] = [
   userWorkloadTool,
   ubndDirectivesTool,
   searchLegalDocsTool,
+  legalDeepResearchTool,
   // Write tools (cần confirm trước khi execute thật)
   createTaskTool,
   updateTaskStatusTool,

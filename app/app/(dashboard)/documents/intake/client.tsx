@@ -343,6 +343,11 @@ function ReviewPanel({
                   Rule-based only
                 </span>
               )}
+              {preview.usedOCR && (
+                <span className="text-xs font-normal bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">
+                  Đã OCR ({preview.pageCount} trang)
+                </span>
+              )}
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={onCancel}>
               <RefreshCcw className="h-4 w-4" /> Phân loại lại

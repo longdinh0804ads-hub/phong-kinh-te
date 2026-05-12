@@ -78,6 +78,10 @@ export interface ClassificationPreview {
   /** Excerpt văn bản hiển thị UI */
   textExcerpt?: string;
   textLength?: number;
+  /** Có dùng OCR không (báo user biết) */
+  usedOCR?: boolean;
+  /** Số trang PDF */
+  pageCount?: number;
 }
 
 // ============== ACTION 1: dryClassifyDocument ==============
@@ -95,7 +99,7 @@ export async function dryClassifyDocument(
   const file = formData.get("file") as File | null;
   if (!file) return { ok: false, error: "Thiếu file" };
 
-  // Extract text
+  // Extract text (tự động OCR nếu PDF scan)
   let extract;
   try {
     extract = await extractTextFromFile(file);
@@ -106,7 +110,11 @@ export async function dryClassifyDocument(
   if (extract.text.trim().length < 50) {
     return {
       ok: false,
-      error: "Văn bản trích xuất quá ngắn. Có thể là PDF scan không OCR được, hoặc file rỗng.",
+      error:
+        "Văn bản trích xuất quá ngắn (<50 ký tự). " +
+        (extract.usedOCR
+          ? "OCR đã chạy nhưng không lấy được text - PDF có thể chất lượng quá thấp."
+          : "Có thể là PDF scan không OCR được, hoặc file rỗng. Vui lòng nhập thủ công."),
     };
   }
 
@@ -138,6 +146,8 @@ export async function dryClassifyDocument(
     token,
     textExcerpt: extract.text.slice(0, 500),
     textLength: extract.text.length,
+    usedOCR: extract.usedOCR,
+    pageCount: extract.pageCount,
   };
 }
 
