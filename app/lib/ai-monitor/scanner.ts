@@ -3,13 +3,18 @@
 
 import { db } from "@/lib/db";
 import type { Role } from "@prisma/client";
+import { runDeadlineAlerts } from "./deadline-alerts";
 
 // =====================================================
 // Risk types
 // =====================================================
 export const RISK_TYPES = {
   OVERDUE: "RISK_OVERDUE",
+  /** @deprecated dùng DEADLINE_D3 / DEADLINE_D1 / DEADLINE_TODAY */
   DEADLINE_SOON: "RISK_DEADLINE_SOON",
+  DEADLINE_D3: "RISK_DEADLINE_D3",     // cách hạn 3 ngày
+  DEADLINE_D1: "RISK_DEADLINE_D1",     // cách hạn 1 ngày
+  DEADLINE_TODAY: "RISK_DEADLINE_TODAY", // đến hạn hôm nay
   STALE_PENDING: "RISK_STALE_PENDING",
   UBND_DEADLINE: "RISK_UBND_DEADLINE",
   OVERLOAD: "RISK_OVERLOAD",
@@ -202,58 +207,17 @@ export async function runRiskScan(): Promise<ScanResult> {
     result.errors.push(`overdue-scan: ${e.message}`);
   }
 
-  // ====== STEP 2: DEADLINE_SOON (task < 24h) ======
+  // ====== STEP 2: DEADLINE ALERTS (D-3 / D-1 / D-0) ======
+  // Module mới: cảnh báo 3 mốc rõ ràng, gửi cho cả TP/PTP và cán bộ đảm nhận.
+  // Thay thế logic "DEADLINE_SOON 24h" cũ.
   try {
-    const soonCutoff = new Date(now.getTime() + THRESHOLDS.DEADLINE_SOON_HOURS * 3600_000);
-    const soonTasks = await db.task.findMany({
-      where: {
-        status: { in: ["PENDING", "IN_PROGRESS"] },
-        deadline: { gte: now, lte: soonCutoff },
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        title: true,
-        deadline: true,
-        assigneeId: true,
-        assignee: { select: { name: true, teamGroupCode: true } },
-        taskGroup: { select: { code: true, name: true } },
-      },
-      take: 200,
-    });
-    result.risks.deadlineSoonCount = soonTasks.length;
-
-    for (const t of soonTasks) {
-      const hours = Math.max(
-        0,
-        Math.floor((t.deadline.getTime() - now.getTime()) / 3600_000)
-      );
-      const recipientIds = new Set<string>();
-      if (t.assigneeId) recipientIds.add(t.assigneeId);
-      const leaders = await getLeaderIdsFor({
-        assigneeTeamGroupCode: t.assignee?.teamGroupCode || t.taskGroup?.code,
-      });
-      leaders.forEach((id) => recipientIds.add(id));
-
-      const personLabel = t.assignee?.name || t.taskGroup?.name || "(chưa giao)";
-      const msg = `Nhiệm vụ "${t.title}" (${personLabel}) còn ${hours} giờ tới hạn.`;
-      const link = `/tasks/${t.id}`;
-
-      for (const userId of recipientIds) {
-        const r = await createNotificationIfNew({
-          userId,
-          type: RISK_TYPES.DEADLINE_SOON,
-          entityId: t.id,
-          title: `⏰ Còn ${hours}h tới hạn`,
-          message: msg,
-          link,
-        });
-        if (r === "created") result.notificationsCreated++;
-        else result.notificationsSkippedDedup++;
-      }
-    }
+    const da = await runDeadlineAlerts();
+    result.risks.deadlineSoonCount = da.scanned;
+    result.notificationsCreated += da.notificationsCreated;
+    result.notificationsSkippedDedup += da.notificationsSkippedDedup;
+    if (da.errors.length > 0) result.errors.push(...da.errors);
   } catch (e: any) {
-    result.errors.push(`deadline-soon: ${e.message}`);
+    result.errors.push(`deadline-alerts: ${e.message}`);
   }
 
   // ====== STEP 3: STALE_PENDING (task PENDING > 7 ngày) ======

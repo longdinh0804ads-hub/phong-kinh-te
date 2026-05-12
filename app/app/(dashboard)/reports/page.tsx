@@ -11,7 +11,7 @@ import { EXCLUDE_SUPER_ADMIN } from "@/lib/user-filters";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileBarChart, Calendar, Users, ClipboardList } from "lucide-react";
+import { FileBarChart, Calendar, Users, ClipboardList, Sparkles } from "lucide-react";
 
 export default async function ReportsPage() {
   const user = await requireAuth();
@@ -104,6 +104,14 @@ export default async function ReportsPage() {
           icon={FileBarChart}
           href="/reports/ubnd"
         />
+        {isFullScope && (
+          <ReportCard
+            title="Đề xuất nhắc nhở (AI)"
+            description="AI phát hiện cán bộ làm việc kém hiệu quả, TP duyệt nhắc nhở"
+            icon={Sparkles}
+            href="/reports/proposals"
+          />
+        )}
       </div>
 
       <Card>

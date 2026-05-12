@@ -148,6 +148,8 @@ model User {
   loginAttempts     LoginAttempt[]
   trustedDevices    TrustedDevice[]
   securityEvents    SecurityEvent[]
+  proposalsAboutMe       AIProposal[] @relation("ProposalTarget")
+  proposalsReviewedByMe  AIProposal[] @relation("ProposalReviewer")
 
   @@index([role])
   @@index([department])
@@ -722,6 +724,39 @@ model TrustedDevice {
   @@unique([userId, deviceId])
   @@index([userId, lastSeenAt])
   @@map("trusted_devices")
+}
+
+/// AI đề xuất nhắc nhở cán bộ làm việc kém hiệu quả (Phase performance proposal).
+/// Khi performance-analyzer phát hiện cán bộ có ≥2 flag (HIGH_OVERDUE, LOW_COMPLETION, LOW_REPORTING),
+/// nó tạo proposal pending. TP duyệt (approve/reject) trước khi gửi nhắc nhở thực sự.
+model AIProposal {
+  id            String   @id @default(cuid())
+  /// "PERFORMANCE_REMINDER" (mở rộng các loại khác sau)
+  type          String
+  targetUserId  String
+  targetUser    User     @relation("ProposalTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  /// JSON evidence: { metrics, flags, missedTaskIds, completionRate, ... }
+  evidence      Json
+  /// Nội dung nhắc nhở AI gợi ý
+  proposedNote  String   @db.Text
+  /// "pending" | "approved" | "rejected" | "expired"
+  status        String   @default("pending")
+
+  reviewedById  String?
+  reviewedBy    User?    @relation("ProposalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  /// Ghi chú khi TP duyệt + nội dung đã edit (override AI text trước khi gửi)
+  finalNote     String?  @db.Text
+
+  /// Auto-expire 7 ngày
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetUserId])
+  @@map("ai_proposals")
 }
 
 /// Sự kiện bảo mật: device mới, IP lạ, locked, password change, 2FA enable/disable...
