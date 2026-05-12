@@ -185,7 +185,7 @@ export function ChatInterface({ userId, userName }: { userId: string; userName: 
   const inputDisabled = loading || aiAvailable === false || loadingConv;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 h-[calc(100vh-12rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 h-full min-h-0">
       {/* Sidebar - desktop */}
       <div className="hidden lg:block">
         <ConversationSidebar

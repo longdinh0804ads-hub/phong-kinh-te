@@ -106,24 +106,31 @@ export function ConversationSidebar({
     }
   }
 
+  const totalCount = conversations.length;
+
   return (
     <>
-      <aside className="flex flex-col h-full bg-card border rounded-lg overflow-hidden">
-        <div className="p-3 border-b">
+      <aside className="flex flex-col h-full min-h-0 bg-card border rounded-lg overflow-hidden">
+        <div className="p-3 border-b shrink-0">
           <Button onClick={startNewChat} className="w-full" size="sm">
             <Plus className="h-4 w-4" />
             Hội thoại mới
           </Button>
+          {totalCount > 0 && (
+            <div className="text-[10px] text-muted-foreground text-center mt-1.5">
+              {totalCount} hội thoại
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0 scroll-smooth">
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground">
               <MessageSquare className="h-10 w-10 mx-auto opacity-30 mb-2" />
               <p className="text-sm">Chưa có hội thoại nào</p>
             </div>
           ) : (
-            <div className="p-2 space-y-3">
+            <div className="p-2 space-y-2">
               {groups.pinned.length > 0 && (
                 <ConvGroup
                   title="📌 Ghim"
@@ -159,22 +166,23 @@ export function ConversationSidebar({
               )}
               {groups.older.length > 0 && (
                 <ConvGroup
-                  title="7 ngày qua"
+                  title="Cũ hơn"
                   items={groups.older}
                   activeId={activeId}
                   onSelect={onSelect}
                   onTogglePin={togglePin}
                   onAskDelete={setConfirmDelete}
                   isPending={isPending}
+                  defaultCollapsed={groups.older.length > 5}
                 />
               )}
             </div>
           )}
         </div>
 
-        <div className="p-3 border-t bg-muted/30 text-xs text-muted-foreground flex items-center gap-1.5">
-          <Clock className="h-3 w-3" />
-          Tự động xóa sau 7 ngày (trừ hội thoại đã ghim)
+        <div className="p-2 border-t bg-muted/30 text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+          <Clock className="h-3 w-3 shrink-0" />
+          <span className="truncate">Tự xóa sau 7 ngày (trừ ghim)</span>
         </div>
       </aside>
 
@@ -218,6 +226,7 @@ function ConvGroup({
   onTogglePin,
   onAskDelete,
   isPending,
+  defaultCollapsed = false,
 }: {
   title: string;
   items: ConversationSummary[];
@@ -226,25 +235,40 @@ function ConvGroup({
   onTogglePin: (id: string) => void;
   onAskDelete: (c: ConversationSummary) => void;
   isPending: boolean;
+  defaultCollapsed?: boolean;
 }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const showCount = collapsed ? 0 : items.length;
+  const containsActive = items.some((c) => c.id === activeId);
+  // Auto-expand nếu group chứa conversation đang active
+  const effectiveCollapsed = collapsed && !containsActive;
+
   return (
     <div>
-      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
-        {title}
-      </div>
-      <div className="space-y-0.5">
-        {items.map((c) => (
-          <ConvItem
-            key={c.id}
-            conv={c}
-            active={activeId === c.id}
-            onSelect={onSelect}
-            onTogglePin={onTogglePin}
-            onAskDelete={onAskDelete}
-            isPending={isPending}
-          />
-        ))}
-      </div>
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5 flex items-center justify-between hover:text-foreground transition-colors"
+      >
+        <span>{title}</span>
+        <span className="text-[10px] font-normal opacity-60">
+          {effectiveCollapsed ? `▶ ${items.length}` : items.length}
+        </span>
+      </button>
+      {!effectiveCollapsed && (
+        <div className="space-y-0.5">
+          {items.map((c) => (
+            <ConvItem
+              key={c.id}
+              conv={c}
+              active={activeId === c.id}
+              onSelect={onSelect}
+              onTogglePin={onTogglePin}
+              onAskDelete={onAskDelete}
+              isPending={isPending}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -267,19 +291,22 @@ function ConvItem({
   return (
     <div
       className={cn(
-        "group flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors",
+        "group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
         active ? "bg-primary/10 text-primary" : "hover:bg-accent"
       )}
       onClick={() => onSelect(conv.id)}
+      title={conv.title || "Hội thoại"}
     >
-      <MessageSquare className="h-4 w-4 shrink-0 opacity-60" />
+      <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-60" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{conv.title || "Hội thoại"}</div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-sm font-medium truncate leading-tight">
+          {conv.title || "Hội thoại"}
+        </div>
+        <div className="text-[10px] text-muted-foreground truncate">
           {conv._count.messages} tin · {formatRelative(conv.updatedAt)}
         </div>
       </div>
-      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -290,9 +317,9 @@ function ConvItem({
           title={conv.isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
         >
           {conv.isPinned ? (
-            <PinOff className="h-3.5 w-3.5" />
+            <PinOff className="h-3 w-3" />
           ) : (
-            <Pin className="h-3.5 w-3.5" />
+            <Pin className="h-3 w-3" />
           )}
         </button>
         <button
@@ -303,7 +330,7 @@ function ConvItem({
           className="p-1 rounded hover:bg-background hover:text-destructive"
           title="Xóa hội thoại"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-3 w-3" />
         </button>
       </div>
     </div>
