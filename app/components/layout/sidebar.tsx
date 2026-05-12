@@ -16,6 +16,7 @@ import {
   Inbox,
   Settings,
   Building2,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@prisma/client";
@@ -87,6 +88,13 @@ const NAV_ITEMS: NavItem[] = [
       hasPermission(r, "tthc:view:all") ||
       hasPermission(r, "tthc:view:dept") ||
       hasPermission(r, "tthc:view:own"),
+  },
+  // Thi đua: tất cả role xem được (gamification - cán bộ xem rank của mình)
+  {
+    label: "Thi đua",
+    href: "/thi-dua",
+    icon: Trophy,
+    show: (r) => r !== "SUPER_ADMIN",
   },
   // Báo cáo: chỉ TP/PTP/TRUONG_BO_PHAN
   {
