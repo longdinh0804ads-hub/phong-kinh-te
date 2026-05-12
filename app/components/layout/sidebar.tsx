@@ -41,6 +41,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Tổng quan", href: "/", icon: LayoutDashboard },
   { label: "Công việc", href: "/tasks", icon: ClipboardList, badgeKey: "tasks" },
   { label: "Lịch công tác", href: "/schedule", icon: CalendarDays },
+  // Document Intake AI: TP/PTP/TBP/Admin tiếp nhận văn bản đến → AI tự phân loại
+  {
+    label: "Tiếp nhận văn bản (AI)",
+    href: "/documents/intake",
+    icon: Inbox,
+    show: (r) => isTopLeader(r) || isDeptManager(r) || r === "SUPER_ADMIN",
+  },
   // UBND: NHAN_VIEN xem được "own" - vẫn hiện menu để NV biết mục giao cho mình
   {
     label: "Nhiệm vụ UBND",
