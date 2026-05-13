@@ -10,6 +10,7 @@ import {
   History,
   Wrench,
   LogOut,
+  FileSignature,
 } from "lucide-react";
 import { LogoutButton } from "@/components/admin/logout-button";
 
@@ -28,6 +29,7 @@ export default async function AdminLayout({
     { href: "/admin", label: "Tổng quan", icon: Activity },
     { href: "/admin/api-keys", label: "API Keys", icon: Key },
     { href: "/admin/users", label: "Tài khoản", icon: Users },
+    { href: "/admin/pgv", label: "Phiếu giao việc", icon: FileSignature },
     { href: "/admin/audit", label: "Lịch sử", icon: History },
     { href: "/admin/maintenance", label: "Bảo trì", icon: Wrench },
   ];

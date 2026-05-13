@@ -43,6 +43,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           assignee: { select: { id: true, name: true } },
         },
       },
+      assignmentSheet: {
+        select: { id: true, number: true, year: true },
+      },
     },
   });
 
@@ -159,6 +162,35 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {task.assignmentSheet && (
+            <Card className="border-primary/40 bg-primary/5">
+              <CardContent className="pt-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+                    📄
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">
+                      Phiếu giao việc số{" "}
+                      <strong>
+                        {String(task.assignmentSheet.number).padStart(2, "0")}/PGV-KT/
+                        {task.assignmentSheet.year}
+                      </strong>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Tự sinh khi Trưởng phòng/Phó TP giao nhiệm vụ
+                    </div>
+                  </div>
+                </div>
+                <Link
+                  href={`/tasks/${task.id}/phieu-giao-viec`}
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+                >
+                  Xem phiếu →
+                </Link>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Mô tả</CardTitle>

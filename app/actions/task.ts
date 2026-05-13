@@ -143,9 +143,26 @@ export async function createTask(input: TaskCreateInput) {
     }
   }
 
+  // Auto-tạo Phiếu giao việc nếu creator là TP/PTP (theo policy: chỉ 2 role này được ký phiếu)
+  let sheetInfo: { number: number; year: number } | null = null;
+  if (user.role === "TRUONG_PHONG" || user.role === "PHO_TP") {
+    try {
+      const { createAssignmentSheet } = await import("@/lib/assignment-sheet");
+      const result = await createAssignmentSheet({ taskId: task.id });
+      sheetInfo = { number: result.number, year: result.year };
+    } catch (e: any) {
+      // Sheet fail không block task creation
+      console.error("[createTask] Auto-create sheet failed:", e?.message);
+    }
+  }
+
   revalidatePath("/tasks");
   revalidatePath("/");
-  return { success: true, taskId: task.id };
+  return {
+    success: true,
+    taskId: task.id,
+    sheetNumber: sheetInfo ? `${sheetInfo.number}/PGV-KT/${sheetInfo.year}` : null,
+  };
 }
 
 // State machine cho task status để chặn transition không hợp lệ qua API.

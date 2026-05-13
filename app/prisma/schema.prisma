@@ -281,6 +281,7 @@ model Task {
 
   progressReports ProgressReport[]
   notes           TaskNote[]
+  assignmentSheet AssignmentSheet?
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -724,6 +725,44 @@ model TrustedDevice {
   @@unique([userId, deviceId])
   @@index([userId, lastSeenAt])
   @@map("trusted_devices")
+}
+
+/// Phiếu giao việc tự sinh kèm theo Task khi TP/PTP tạo nhiệm vụ.
+/// Theo mẫu hành chính Phòng Kinh Tế: số phiếu format "<seq>/PGV-KT/<year>",
+/// reset đầu năm, unique trong năm.
+model AssignmentSheet {
+  id      String @id @default(cuid())
+  taskId  String @unique
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // Số phiếu - unique theo năm
+  number  Int    // 42
+  year    Int    // 2026
+  issuedAt DateTime @default(now())
+
+  // 4 mục nội dung
+  basisDocument  String? @db.Text  // Mục 1: VB căn cứ (auto từ source HOẶC TP nhập)
+  workContent    String? @db.Text  // Mục 4a: nội dung cần thực hiện
+  deliverable    String? @db.Text  // Mục 4b: sản phẩm (auto từ task.description nếu trống)
+  assignmentNote String? @db.Text  // Mục 3: phân công chi tiết (auto "Đ/c X phụ trách" + edit được)
+
+  // Nơi nhận (toggle)
+  recipientChuTich Boolean  @default(false)
+  recipientPCT     Boolean  @default(false)
+  recipientHDND    Boolean  @default(false)
+  recipientCustom  String[] @default([])
+
+  // Người ký (hiện cố định TP Vũ Văn Tuấn qua SystemSetting PGV_SIGNER_*,
+  // có thể override per-sheet sau này nếu cần)
+  signerName  String?
+  signerTitle String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, number])
+  @@index([taskId])
+  @@map("assignment_sheets")
 }
 
 /// AI đề xuất nhắc nhở cán bộ làm việc kém hiệu quả (Phase performance proposal).
